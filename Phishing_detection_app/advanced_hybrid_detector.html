@@ -10,7 +10,8 @@
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            /* WARNA BACKGROUND DIUBAH KE PUTIH */
+            background: linear-gradient(135deg, #ffffff 0%, #ffffff 100%);
             min-height: 100vh;
             padding: 20px;
         }
@@ -25,7 +26,8 @@
         }
         
         .header {
-            background: linear-gradient(135deg, #ff5722 0%, #e64a19 100%);
+            /* WARNA HEADER DIUBAH KE HITAM/ABU-ABU GELAP */
+            background: linear-gradient(135deg, #121110 0%, #141211 100%);
             color: white;
             padding: 50px;
             text-align: center;
@@ -112,15 +114,17 @@
         
         .url-input:focus {
             outline: none;
-            border-color: #ff5722;
-            box-shadow: 0 0 0 5px rgba(255, 87, 34, 0.1);
+            /* WARNA FOKUS INPUT DIUBAH KE HITAM */
+            border-color: #0e0907;
+            box-shadow: 0 0 0 5px rgba(30, 30, 30, 0.1);
             transform: translateY(-2px);
         }
         
         .analyze-btn {
             width: 100%;
             padding: 22px;
-            background: linear-gradient(135deg, #ff5722 0%, #e64a19 100%);
+             /* WARNA TOMBOL DIUBAH KE HITAM */
+            background: linear-gradient(135deg, #151212 0%, #171413 100%);
             color: white;
             border: none;
             border-radius: 15px;
@@ -152,7 +156,8 @@
         
         .analyze-btn:hover:not(:disabled) {
             transform: translateY(-3px);
-            box-shadow: 0 15px 40px rgba(255, 87, 34, 0.4);
+            /* SHADOW TOMBOL DIUBAH KE ABU-ABU GELAP */
+            box-shadow: 0 15px 40px rgba(35, 29, 27, 0.4);
         }
         
         .analyze-btn:disabled {
@@ -181,7 +186,8 @@
             width: 60px;
             height: 60px;
             border: 6px solid #e3f2fd;
-            border-top: 6px solid #ff5722;
+            /* SPINNER DIUBAH KE HITAM */
+            border-top: 6px solid #231e1c;
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin-right: 20px;
@@ -238,6 +244,7 @@
             100% { transform: translateX(100%); }
         }
         
+        /* WARNA HASIL DETEKSI (MERAH, KUNING, HIJAU) TIDAK DIUBAH */
         .result.safe { 
             background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
             color: white;
@@ -395,10 +402,10 @@
         }
         
         .url-categories {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            grid-template-columns: 1fr;
             gap: 30px;
             margin-top: 30px;
+            display: block; 
         }
         
         .url-category {
@@ -409,6 +416,14 @@
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
+            margin-bottom: 30px;
+        }
+
+        .url-list-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px; 
+            margin-top: 15px;
         }
         
         .url-category::before {
@@ -418,7 +433,8 @@
             left: 0;
             right: 0;
             height: 5px;
-            background: linear-gradient(90deg, #ff5722, #e64a19);
+            /* GARIS ATAS DIUBAH KE HITAM */
+            background: linear-gradient(90deg, #171312, #1a1615);
             transform: translateX(-100%);
             transition: transform 0.3s ease;
         }
@@ -454,7 +470,7 @@
         .url-example {
             background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
             padding: 15px 20px;
-            margin: 12px 0;
+            margin: 0; 
             border-radius: 12px;
             cursor: pointer;
             transition: all 0.3s ease;
@@ -464,19 +480,40 @@
             border: 2px solid transparent;
         }
         
+        .url-list-columns .url-example {
+             margin-bottom: 15px;
+        }
+        .url-list-columns .url-example:nth-last-child(-n + 2) { 
+            margin-bottom: 0; 
+        }
+        .url-list-columns:not(:has(.url-example:nth-child(even):last-child)) .url-example:last-child {
+            margin-bottom: 0;
+        }
+        
         .url-example:hover {
-            background: linear-gradient(135deg, #ff5722 0%, #e64a19 100%);
+            /* WARNA HOVER DIUBAH KE HITAM */
+            background: linear-gradient(135deg, #151212 0%, #171413 100%);
             color: white;
+            border-color: #0e0907;
             transform: translateX(10px);
-            border-color: #d84315;
         }
         
         @media (max-width: 768px) {
             .main-content { padding: 40px 25px; }
             .header { padding: 40px 25px; }
             .tech-stack { flex-direction: column; align-items: center; }
-            .url-categories { grid-template-columns: 1fr; }
             .details-grid { grid-template-columns: 1fr; }
+            
+            .url-list-columns { 
+                grid-template-columns: 1fr; 
+                gap: 0; 
+            } 
+            .url-list-columns .url-example {
+                margin-bottom: 15px;
+            }
+            .url-list-columns .url-example:last-child {
+                margin-bottom: 0;
+            }
         }
         .accuracy-badge {
             position: absolute;
@@ -499,6 +536,7 @@
         .threat-meter {
             flex: 1;
             height: 30px;
+            /* TINGKAT ANCAMAN TETAP RGB (MERAH-HIJAU) */
             background: linear-gradient(90deg, #4caf50 0%, #ff9800 50%, #f44336 100%);
             border-radius: 15px;
             position: relative;
@@ -540,7 +578,6 @@
     <div class="container">
         <div class="header">
             <div class="header-content">
-                <!-- <div class="accuracy-badge">🎯 Akurasi: 96.8%</div> -->
                 <h1>🛡️ Advanced Hybrid Phishing Detector - ULTRA ENHANCED v2.0</h1>
                 <div class="subtitle">Next-Gen AI Cybersecurity System - Real ML Models + Advanced Features</div>
                 <div class="tech-stack">
@@ -594,20 +631,22 @@
                             <span class="category-icon">✅</span>
                             <span class="category-title">Safe & Legitimate URLs</span>
                         </div>
-                        <div class="url-example" onclick="fillURL('https://www.google.com')">
-                            https://www.google.com
-                        </div>
-                        <div class="url-example" onclick="fillURL('https://github.com')">
-                            https://github.com
-                        </div>
-                        <div class="url-example" onclick="fillURL('https://stackoverflow.com')">
-                            https://stackoverflow.com
-                        </div>
-                        <div class="url-example" onclick="fillURL('https://www.microsoft.com')">
-                            https://www.microsoft.com
-                        </div>
-                        <div class="url-example" onclick="fillURL('https://www.apple.com')">
-                            https://www.apple.com
+                        <div class="url-list-columns">
+                            <div class="url-example" onclick="fillURL('https://www.google.com')">
+                                https://www.google.com
+                            </div>
+                            <div class="url-example" onclick="fillURL('https://github.com')">
+                                https://github.com
+                            </div>
+                            <div class="url-example" onclick="fillURL('https://stackoverflow.com')">
+                                https://stackoverflow.com
+                            </div>
+                            <div class="url-example" onclick="fillURL('https://www.microsoft.com')">
+                                https://www.microsoft.com
+                            </div>
+                            <div class="url-example" onclick="fillURL('https://www.apple.com')">
+                                https://www.apple.com
+                            </div>
                         </div>
                     </div>
                     
@@ -616,20 +655,22 @@
                             <span class="category-icon">🚨</span>
                             <span class="category-title">Suspicious & Phishing URLs</span>
                         </div>
-                        <div class="url-example" onclick="fillURL('www.dghjdgf.com/paypal.co.uk/cycgi-bin/webscrcmd=_home-customer&nav=1/loading.php')">
-                            www.dghjdgf.com/paypal.co.uk/cycgi-bin/webscrcmd=_home-customer&nav=1/loading.php
-                        </div>
-                        <div class="url-example" onclick="fillURL('https://smmhejtkx.olghvlbkcdqtscd.top/ksjdbj')">
-                            https://smmhejtkx.olghvlbkcdqtscd.top/ksjdbj
-                        </div>
-                        <div class="url-example" onclick="fillURL('http://paypal-verify-account-urgent.suspicious.tk')">
-                            http://paypal-verify-account-urgent.suspicious.tk
-                        </div>
-                        <div class="url-example" onclick="fillURL('https://secure-login.verify.paypal.account-update.phishingsite.com')">
-                            https://secure-login.verify.paypal.account-update.phishingsite.com
-                        </div>
-                        <div class="url-example" onclick="fillURL('http://192.168.1.1/amazon-login@phishing-secure.com')">
-                            http://192.168.1.1/amazon-login@phishing-secure.com
+                        <div class="url-list-columns">
+                            <div class="url-example" onclick="fillURL('www.dghjdgf.com/paypal.co.uk/cycgi-bin/webscrcmd=_home-customer&nav=1/loading.php')">
+                                www.dghjdgf.com/paypal.co.uk/cycgi-bin/webscrcmd=_home-customer&nav=1/loading.php
+                            </div>
+                            <div class="url-example" onclick="fillURL('https://smmhejtkx.olghvlbkcdqtscd.top/ksjdbj')">
+                                https://smmhejtkx.olghvlbkcdqtscd.top/ksjdbj
+                            </div>
+                            <div class="url-example" onclick="fillURL('http://paypal-verify-account-urgent.suspicious.tk')">
+                                http://paypal-verify-account-urgent.suspicious.tk
+                            </div>
+                            <div class="url-example" onclick="fillURL('https://secure-login.verify.paypal.account-update.phishingsite.com')">
+                                https://secure-login.verify.paypal.account-update.phishingsite.com
+                            </div>
+                            <div class="url-example" onclick="fillURL('http://192.168.1.1/amazon-login@phishing-secure.com')">
+                                http://192.168.1.1/amazon-login@phishing-secure.com
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1491,27 +1532,30 @@
         }
     }
     
-    // Display function dengan update untuk Random Forest + XGBoost
+    // Display function DENGAN PERBAIKAN LOGIKA ICON
     function displayEnhancedResult(result, url) {
         const resultDiv = document.getElementById('result');
         const confidencePercent = (result.confidence * 100).toFixed(1);
         
         let resultClass = result.category || 'safe';
-        let resultIcon = '✅';
+        let resultIcon = '❓'; 
         let threatLevel = 10;
         
-        if (result.result.includes('🚨')) {
-            resultIcon = '🚨'; resultClass = 'phishing';
+        // --- PERBAIKAN LOGIKA ICON BERDASARKAN KATEGORI ---
+        if (result.category === 'phishing') {
+            resultIcon = '🚨'; 
+            resultClass = 'phishing';
             threatLevel = 85 + (result.confidence * 15);
-        } else if (result.result.includes('⚠️')) {
-            resultIcon = '⚠️'; resultClass = 'suspicious';
-            threatLevel = 60 + (result.confidence * 25);
-        } else if (result.result.includes('🟡')) {
-            resultIcon = '🟡'; resultClass = 'suspicious';
-            threatLevel = 40 + (result.confidence * 20);
+        } else if (result.category === 'suspicious') {
+            resultIcon = '⚠️'; 
+            resultClass = 'suspicious';
+            threatLevel = 40 + (result.confidence * 25);
         } else {
+            resultIcon = '✅'; 
+            resultClass = 'safe';
             threatLevel = Math.max(5, 20 - (result.confidence * 15));
         }
+        // --- PERBAIKAN SELESAI ---
         
         let algorithmBreakdown = '';
         let mlModelStatus = '';
