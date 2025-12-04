@@ -7,7 +7,8 @@ import pickle
 
 # Define the path to the data file
 current_dir = os.path.dirname(os.path.abspath(__file__))
-data_file_path = os.path.join(current_dir, 'DataFiles', '5.urldata.csv')
+- data_file_path = os.path.join(current_dir, 'DataFiles', '5.urldata.csv')
++ data_file_path = os.path.join(current_dir, 'DataFiles', 'cleaned_dataset_fixed.csv')
 
 # Load the dataset
 data = pd.read_csv(data_file_path)
