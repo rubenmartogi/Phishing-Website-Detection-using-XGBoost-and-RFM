@@ -13,8 +13,18 @@ data_file_path = os.path.join(current_dir, 'DataFiles', 'Dataset89_terbaru.csv')
 # Load the dataset
 data = pd.read_csv(data_file_path)
 
-# Extract features and labels (DROP URL!)
-X = data.drop(columns=['url', 'label'])
+# List fitur URL-based
+url_features = [
+    "length_url", "length_hostname", "ip", "nb_dots", "nb_hyphens", "nb_at", "nb_qm", "nb_and",
+    "nb_eq", "nb_underscore", "nb_tilde", "nb_percent", "nb_slash", "nb_star", "nb_colon",
+    "nb_comma", "nb_semicolumn", "nb_dollar", "nb_space", "nb_www", "nb_com", "nb_dslash",
+    "http_in_path", "https_token", "ratio_digits_url", "ratio_digits_host", "punycode", "port",
+    "tld_in_path", "tld_in_subdomain", "abnormal_subdomain", "nb_subdomains", "prefix_suffix",
+    "random_domain", "shortening_service", "path_extension", "nb_redirection"
+]
+
+# Extract only URL-based features
+X = data[url_features]
 y = data['label']
 
 # Split the dataset

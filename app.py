@@ -1,223 +1,377 @@
-import streamlit as st
-import numpy as np
+import math
+import ipaddress
 import pickle
-from urllib.parse import urlparse
-import requests
-from urllib.parse import urlparse
-from datetime import datetime
 import re
-from requests.exceptions import SSLError, Timeout  # Add this import for SSLError and Timeout
+import pandas as pd
+from urllib.parse import urlparse
 
+import numpy as np
+from flask import Flask, jsonify, request, send_from_directory
 
-def get_domain(url):  
-    domain = urlparse(url).netloc
-    if re.match(r"^www.",domain):
-        domain = domain.replace("www.","")
-    return domain
+# =========================
+# Konfigurasi
+# =========================
+FEATURE_COLUMNS_PATH = "feature_columns.txt"
+RF_MODEL_PATH = "random_forest_model.pkl"
+XGB_MODEL_PATH = "xgboost_model.pkl"
+META_MODEL_PATH = "rule_lr.pkl"
 
-def having_ip(url):
+SUSPICIOUS_TLD = {"zip", "xyz", "top", "tk", "ga", "ml", "gq", "cf", "pw", "cc", "club"}
+SHORTENERS = {
+    "bit.ly", "goo.gl", "tinyurl.com", "ow.ly", "t.co", "is.gd", "buff.ly",
+    "adf.ly", "bit.do", "cutt.ly"
+}
+
+PHISH_HINTS = [
+    "login", "verify", "update", "secure", "account", "bank",
+    "paypal", "apple", "microsoft", "confirm", "signin", "password"
+]
+
+app = Flask(__name__, static_folder="Phishing_detection_app")
+
+# =========================
+# Utils
+# =========================
+def entropy(s: str) -> float:
+    if not s:
+        return 0.0
+    probs = [s.count(c) / len(s) for c in set(s)]
+    return -sum(p * math.log2(p) for p in probs)
+
+def get_feature_columns():
     try:
-        ipaddress.ip_address(url)
-        ip = 1
-    except:
-        ip = 0
-    return ip
+        with open(FEATURE_COLUMNS_PATH, "r") as f:
+            feature_columns = [line.strip() for line in f if line.strip()]
+        return feature_columns
+    except FileNotFoundError:
+        return []
 
-def have_at_sign(url):
-    if "@" in url:
-        at = 1
-    else:
-        at = 0
-    return at
+def parse_url(url: str):
+    if not url.startswith(("http://", "https://")):
+        url = "http://" + url
+    parsed = urlparse(url)
+    hostname = parsed.hostname or ""
+    path = parsed.path or ""
+    return url, parsed, hostname, path
 
-def get_length(url):
-    if len(url) < 54:
-        length = 0
-    else:
-        length = 1
-    return length
-
-def get_depth(url):
-    s = urlparse(url).path.split('/')
-    depth = 0
-    for j in range(len(s)):
-        if len(s[j]) != 0:
-            depth = depth+1
-    return depth
-
-def redirection(url):
-    pos = url.rfind('//')
-    if pos > 6:
-        if pos > 7:
-            return 1
-        else:
-            return 0
-    else:
-        return 0
-
-def http_domain(url):
-    domain = urlparse(url).netloc
-    if 'https' in domain:
-        return 1
-    else:
-        return 0
-
-def tiny_url(url):
-    shortening_services = r"bit\.ly|goo\.gl|shorte\.st|go2l\.ink|x\.co|ow\.ly|t\.co|tinyurl|tr\.im|is\.gd|cli\.gs|" \
-                          r"yfrog\.com|migre\.me|ff\.im|tiny\.cc|url4\.eu|twit\.ac|su\.pr|twurl\.nl|snipurl\.com|" \
-                          r"short\.to|BudURL\.com|ping\.fm|post\.ly|Just\.as|bkite\.com|snipr\.com|fic\.kr|loopt\.us|" \
-                          r"doiop\.com|short\.ie|kl\.am|wp\.me|rubyurl\.com|om\.ly|to\.ly|bit\.do|t\.co|lnkd\.in|db\.tt|" \
-                          r"qr\.ae|adf\.ly|goo\.gl|bitly\.com|cur\.lv|tinyurl\.com|ow\.ly|bit\.ly|ity\.im|q\.gs|is\.gd|" \
-                          r"po\.st|bc\.vc|twitthis\.com|u\.to|j\.mp|buzurl\.com|cutt\.us|u\.bb|yourls\.org|x\.co|" \
-                          r"prettylinkpro\.com|scrnch\.me|filoops\.info|vzturl\.com|qr\.net|1url\.com|tweez\.me|v\.gd|" \
-                          r"tr\.im|link\.zip\.net"
-    match=re.search(shortening_services,url)
-    if match:
-        return 1
-    else:
-        return 0
-
-def prefix_suffix(url):
-    if '-' in urlparse(url).netloc:
-        return 1
-    else:
-        return 0 
-
-def web_traffic(url):
+def is_ip(hostname: str) -> int:
     try:
-        querystring = {"domain": url}
-        headers = {
-            "X-RapidAPI-Key": "cd4733fedbmsh6f2cfc21cf195f2p1d088djsn84e6c824c74e",
-            "X-RapidAPI-Host": "similar-web.p.rapidapi.com"
-        }
-        response = requests.get("https://similar-web.p.rapidapi.com/get-analysis", headers=headers, params=querystring)
-        data = response.json()
-        rank = data['GlobalRank']['Rank']
-        rank = int(rank)
-    except (requests.exceptions.RequestException, ValueError, KeyError):
-        rank = 1
-
-    if rank < 100000:
+        ipaddress.ip_address(hostname)
         return 1
-    else:
+    except Exception:
         return 0
 
-def iframe(response):
-    if response == "":
-        return 1
-    else:
-        if re.findall(r"[<iframe>|<frameBorder>]", response.text):
-            return 0
-        else:
-            return 1
+def tld_of(hostname: str) -> str:
+    parts = hostname.split(".")
+    return parts[-1] if len(parts) > 1 else ""
 
-def mouse_over(response): 
-    if response == "" :
-        return 1
-    else:
-        if re.findall("<script>.+onmouseover.+</script>", response.text):
-            return 1
-        else:
-            return 0
+def subdomain_of(hostname: str) -> str:
+    parts = hostname.split(".")
+    if len(parts) <= 2:
+        return ""
+    return ".".join(parts[:-2])
 
-def right_click(response):
-    if response == "":
-        return 1
-    else:
-        if re.findall(r"event.button ?== ?2", response.text):
-            return 0
-        else:
-            return 1
+def abnormal_subdomain(subdomain: str) -> int:
+    if not subdomain:
+        return 0
+    return 1 if ("http" in subdomain or "https" in subdomain) else 0
 
-def forwarding(response):
-    if response == "":
-        return 1
-    else:
-        if len(response.history) <= 2:
-            return 0
-        else:
-            return 1
+def _word_stats(text: str):
+    words = re.findall(r"[A-Za-z0-9]+", text.lower())
+    if not words:
+        return 0, 0, 0, 0.0
+    lengths = [len(w) for w in words]
+    return len(words), min(lengths), max(lengths), float(sum(lengths)) / len(lengths)
 
-def get_http_response(url):
+# =========================
+# Feature Extraction
+# =========================
+def extract_features(url: str) -> dict:
+    full, parsed, hostname, path = parse_url(url)
+    tld = tld_of(hostname)
+    subdomain = subdomain_of(hostname)
+    domain = hostname.split(".")[-2] if len(hostname.split(".")) >= 2 else hostname
+
+    digits_url = sum(c.isdigit() for c in full)
+    digits_host = sum(c.isdigit() for c in hostname)
+
+    # word stats
+    words_raw, shortest_raw, longest_raw, avg_raw = _word_stats(full)
+    words_host, shortest_host, longest_host, avg_host = _word_stats(hostname)
+    words_path, shortest_path, longest_path, avg_path = _word_stats(path)
+
+    # simple heuristics
+    random_domain = 1 if entropy(domain) > 3.5 else 0
+    shortening_service = 1 if any(s in hostname for s in SHORTENERS) else 0
+    prefix_suffix = 1 if "-" in domain else 0
+    path_extension = 1 if "." in path.split("/")[-1] else 0
+    nb_redirection = max(full.lower().count("http") - 1, 0)
+
+    feats = {
+        # === URL‑based features (notebook) ===
+        "length_url": len(full),
+        "length_hostname": len(hostname),
+        "ip": is_ip(hostname),
+        "nb_dots": full.count("."),
+        "nb_hyphens": full.count("-"),
+        "nb_at": full.count("@"),
+        "nb_qm": full.count("?"),
+        "nb_and": full.count("&"),
+        "nb_eq": full.count("="),
+        "nb_underscore": full.count("_"),
+        "nb_tilde": full.count("~"),
+        "nb_percent": full.count("%"),
+        "nb_slash": full.count("/"),
+        "nb_star": full.count("*"),
+        "nb_colon": full.count(":"),
+        "nb_comma": full.count(","),
+        "nb_semicolumn": full.count(";"),
+        "nb_dollar": full.count("$"),
+        "nb_space": full.count(" "),
+        "nb_www": 1 if "www" in hostname else 0,
+        "nb_com": full.count(".com"),
+        "nb_dslash": full.count("//"),
+        "http_in_path": 1 if "http" in path else 0,
+        "https_token": 1 if "https" in full.replace("https://", "") else 0,
+        "ratio_digits_url": digits_url / max(len(full), 1),
+        "ratio_digits_host": digits_host / max(len(hostname), 1),
+        "punycode": 1 if "xn--" in hostname else 0,
+        "port": 1 if parsed.port else 0,
+        "tld_in_path": 1 if tld and (tld in path) else 0,
+        "tld_in_subdomain": 1 if tld and (tld in subdomain) else 0,
+        "abnormal_subdomain": abnormal_subdomain(subdomain),
+        "nb_subdomains": len(subdomain.split(".")) if subdomain else 0,
+        "prefix_suffix": prefix_suffix,
+        "random_domain": random_domain,
+        "shortening_service": shortening_service,
+        "path_extension": path_extension,
+        "nb_redirection": nb_redirection,
+
+        # === word stats (notebook) ===
+        "length_words_raw": words_raw,
+        "char_repeat": sum(1 for i in range(1, len(full)) if full[i] == full[i - 1]),
+        "shortest_words_raw": shortest_raw,
+        "shortest_word_host": shortest_host,
+        "shortest_word_path": shortest_path,
+        "longest_words_raw": longest_raw,
+        "longest_word_host": longest_host,
+        "longest_word_path": longest_path,
+        "avg_words_raw": avg_raw,
+        "avg_word_host": avg_host,
+        "avg_word_path": avg_path,
+        "phish_hints": sum(1 for k in PHISH_HINTS if k in full.lower()),
+        "suspecious_tld": 1 if tld in SUSPICIOUS_TLD else 0,
+
+        # === content/externals (placeholder sesuai notebook) ===
+        "statistical_report": 0,
+        "nb_hyperlinks": 0,
+        "ratio_intHyperlinks": 0.0,
+        "ratio_extHyperlinks": 0.0,
+        "nb_extCSS": 0,
+        "ratio_extRedirection": 0.0,
+        "ratio_intErrors": 0.0,
+        "login_form": 0,
+        "external_favicon": 0,
+        "links_in_tags": 0,
+        "ratio_intMedia": 0.0,
+        "ratio_extMedia": 0.0,
+        "iframe": 0,
+        "popup_window": 0,
+        "safe_anchor": 0,
+        "onmouseover": 0,
+        "right_clic": 0,
+        "empty_title": 0,
+        "domain_in_title": 0,
+        "domain_with_copyright": 0,
+        "whois_registered_domain": 0,
+        "domain_registration_length": -1,
+        "domain_age": -1,
+        "web_traffic": 0,
+        "dns_record": 0,
+        "google_index": 0,
+        "page_rank": 0,
+
+        # === brand features (placeholder) ===
+        "domain_in_brand": 0,
+        "brand_in_subdomain": 0,
+        "brand_in_path": 0,
+
+        # === external redirection (placeholder) ===
+        "nb_external_redirection": 0,
+    }
+    return feats
+
+# =========================
+# Rule-based
+# =========================
+def rule_based_eval(url: str):
+    feats = extract_features(url)
+    full, parsed, hostname, path = parse_url(url)
+    tld = tld_of(hostname)
+    subdomain = subdomain_of(hostname)
+    domain = hostname.split(".")[-2] if len(hostname.split(".")) >= 2 else hostname
+
+    ratio_digits_url = feats["ratio_digits_url"]
+    nb_subdomains = len(subdomain.split(".")) if subdomain else 0
+    random_domain = 1 if entropy(domain) > 3.5 else 0
+    shortening_service = 1 if any(s in hostname for s in SHORTENERS) else 0
+    suspecious_tld = 1 if tld in SUSPICIOUS_TLD else 0
+
+    very_important = {
+        "suspecious_tld": (suspecious_tld == 1),
+        "nb_at": (feats["nb_at"] >= 1),
+        "ip": (feats["ip"] == 1),
+        "nb_underscore": (feats["nb_underscore"] > 3),
+    }
+    important = {
+        "ratio_digits_url": (ratio_digits_url > 0.3),
+        "nb_subdomains": (nb_subdomains > 3),
+        "nb_percent": (feats["nb_percent"] > 5),
+        "nb_tilde": (feats["nb_tilde"] >= 1),
+        "nb_semicolumn": (feats["nb_semicolumn"] >= 1),
+        "nb_star": (feats["nb_star"] >= 1),
+        "nb_comma": (feats["nb_comma"] >= 1),
+        "random_domain": (random_domain == 1),
+    }
+    less_important = {
+        "length_hostname": (feats["length_hostname"] > 30),
+        "nb_dollar": (feats["nb_dollar"] >= 1),
+        "nb_qm": (feats["nb_qm"] > 2),
+        "nb_colon": (feats["nb_colon"] > 1),
+        "nb_eq": (feats["nb_eq"] > 8),
+        "nb_dots": (feats["nb_dots"] > 4),
+        "nb_slash": (feats["nb_slash"] > 7),
+        "nb_and": (feats["nb_and"] > 3),
+        "nb_hyphens": (feats["nb_hyphens"] > 3),
+        "http_in_path": (feats["http_in_path"] == 1),
+        "https_token": (feats["https_token"] == 1),
+        "port": (feats["port"] == 1),
+        "shortening_service": (shortening_service == 1),
+    }
+
+    vi_count = sum(int(v) for v in very_important.values())
+    imp_count = sum(int(v) for v in important.values())
+    less_count = sum(int(v) for v in less_important.values())
+
+    rule1_flag = (vi_count >= 2)
+    risk_score = (3 * vi_count) + (2 * imp_count) + (1 * less_count)
+    rule_flag = int(rule1_flag or (risk_score >= 7))
+
+    if rule_flag == 1:
+        category = "Phishing"
+    elif 4 <= risk_score <= 6:
+        category = "Suspicious"
+    elif 1 <= risk_score <= 3:
+        category = "Caution"
+    else:
+        category = "Benign"
+
+    return risk_score, category, rule_flag
+
+# =========================
+# Model Loading
+# =========================
+def load_models():
+    rf = pickle.load(open(RF_MODEL_PATH, "rb"))
+    xgb = pickle.load(open(XGB_MODEL_PATH, "rb"))
+    meta = None
     try:
-        response = requests.get(url, timeout=5)  # Set a timeout of 5 seconds
-        return response
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error: {e}")
+        meta = pickle.load(open(META_MODEL_PATH, "rb"))
+    except Exception:
+        meta = None
+    return rf, xgb, meta
+
+def build_ml_vector(url: str):
+    feats = extract_features(url)
+    cols = get_feature_columns()
+    if not cols:
+        return None, []
+    vector = [feats.get(c, 0) for c in cols]
+    return np.array([vector]), cols
+
+def predict_models(url: str):
+    rf, xgb, meta = load_models()
+    X, cols = build_ml_vector(url)
+    if X is None:
         return None
 
-def extract_features(url):
-    features = []
-    
-    # Address bar based features
-    features.append(having_ip(url))
-    features.append(have_at_sign(url))
-    features.append(get_length(url))
-    features.append(get_depth(url))
-    features.append(redirection(url))
-    features.append(http_domain(url))
-    features.append(tiny_url(url))
-    features.append(prefix_suffix(url))
+    # Perbaikan: gunakan DataFrame dengan nama kolom
+    features_df = pd.DataFrame(X, columns=cols)
 
-    # Domain based features
-    dns = 0
-    dns_age = 0
-    dns_end = 0
-    features.append(dns)
-    features.append(dns_age)
-    features.append(dns_end)
-    features.append(web_traffic(url))
-    response = get_http_response(url)
+    rf_pred = int(rf.predict(features_df)[0])
+    xgb_pred = int(xgb.predict(features_df)[0])
 
-    # HTML & Javascript based features
-    if response is not None:
-        features.append(iframe(response))
-        features.append(mouse_over(response))
-        features.append(right_click(response))
-        features.append(forwarding(response))
+    try:
+        rf_prob = float(rf.predict_proba(features_df)[0][1])
+    except Exception:
+        rf_prob = float(rf_pred)
+
+    try:
+        xgb_prob = float(xgb.predict_proba(features_df)[0][1])
+    except Exception:
+        xgb_prob = float(xgb_pred)
+
+    stack_pred = None
+    if meta is not None:
+        try:
+            n_in = getattr(meta, "n_features_in_", 2)
+        except Exception:
+            n_in = 2
+
+        meta_feats = [rf_prob, xgb_prob]
+        if n_in >= 3:
+            risk_score, _, rule_flag = rule_based_eval(url)
+            meta_feats = [rf_prob, xgb_prob, rule_flag]
+            if n_in >= 4:
+                meta_feats = [rf_prob, xgb_prob, rule_flag, risk_score]
+
+        meta_X = np.array([meta_feats[:n_in]])
+        try:
+            stack_pred = int(meta.predict(meta_X)[0])
+        except Exception:
+            stack_pred = None
+
+    return {
+        "rf_pred": rf_pred,
+        "xgb_pred": xgb_pred,
+        "stack_pred": stack_pred,
+    }
+
+# =========================
+# Routes
+# =========================
+@app.get("/")
+def index():
+    return send_from_directory(app.static_folder, "advanced_hybrid_detector.html")
+
+@app.post("/predict")
+def predict():
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()
+    if not url:
+        return jsonify({"error": "URL kosong"}), 400
+
+    risk_score, category, rule_flag = rule_based_eval(url)
+    preds = predict_models(url)
+    if preds is None:
+        return jsonify({"error": "feature_columns.txt tidak ditemukan atau kosong"}), 500
+
+    # Jika rule-based PHISHING, langsung PHISHING
+    if category == "Phishing":
+        final_label = 1
     else:
-        # If response is None, set these features to 0 or None
-        features.extend([0, 0, 0, 0])
+        # Jika bukan PHISHING, pakai hasil ML (stacking jika ada, else XGB)
+        final_label = preds["stack_pred"] if preds["stack_pred"] is not None else preds["xgb_pred"]
 
-    return features
+    return jsonify({
+        "risk_score": risk_score,
+        "category": category,
+        "rule_flag": rule_flag,
+        "rf_pred": preds["rf_pred"],
+        "xgb_pred": preds["xgb_pred"],
+        "stack_pred": preds["stack_pred"],
+        "final_label": final_label
+    })
 
-def predict_phishing(features):
-    # Load the model
-    with open('mlp_model.pkl', 'rb') as file:
-        loaded_model = pickle.load(file)
-
-    # Make predictions
-    new_data = np.array([features])
-    prediction = loaded_model.predict(new_data)
-
-    return prediction
-
-def main():
-    st.title('Phishing URL Detector by 24AI836')
-    st.write("Enter or Paste a URL to check if it's phishing or not.")
-    
-    # Input URL
-    url = st.text_input("Enter or Paste URL:")
-    
-    if st.button("Check"):
-        # Extract features
-        st.write("Extracting features...")
-        features = extract_features(url)
-        
-
-        # Make prediction
-        st.write("Predicting...")
-        prediction = predict_phishing(features)
-        
-        # Display prediction
-        if prediction[0] == 0:
-            st.write("Prediction made:")
-
-            st.error("Phishing Alert! This URL is classified as phishing.")
-        else:
-            st.write("Predicting made:")
-
-            st.success("No Phishing Detected. This URL seems safe.")
-    
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)

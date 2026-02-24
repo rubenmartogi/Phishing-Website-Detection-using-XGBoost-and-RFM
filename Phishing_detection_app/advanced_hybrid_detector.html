@@ -581,12 +581,11 @@
                 <h1>🛡️ Advanced Hybrid Phishing Detector - ULTRA ENHANCED v2.0</h1>
                 <div class="subtitle">Next-Gen AI Cybersecurity System - Real ML Models + Advanced Features</div>
                 <div class="tech-stack">
-                    <div class="tech-badge">🧠 Enhanced Rule-based AI</div>
-                    <div class="tech-badge">🌳 Random Forest (5 Trees)</div>
-                    <div class="tech-badge">⚡ XGBoost Gradient Boosting</div>
-                    <div class="tech-badge">🎯 Dynamic Ensemble</div>
-                    <div class="tech-badge">📊 Advanced Features</div>
-                    <div class="tech-badge">🔒 Threat Intelligence</div>
+                    <div class="tech-badge">🛡️ Rule-based Filtering</div>
+                    <div class="tech-badge">🌳 Random Forest</div>
+                    <div class="tech-badge">⚡ XGBoost</div>
+                    <div class="tech-badge">🔗 Logistic Regression Stacking</div>
+                    <div class="tech-badge">🕵️ Threat Intelligence</div>
                 </div>
             </div>
         </div>
@@ -679,860 +678,62 @@
     </div>
 
    <script>
-    // ULTRA ENHANCED VERSION 2.0 - Random Forest + XGBoost + Rule-based
-    class UltraAdvancedPhishingDetector {
-        static SUSPICIOUS_KEYWORDS = [
-            // Enhanced keyword list
-            'verify', 'update', 'suspend', 'confirm', 'secure', 'account',
-            'login', 'signin', 'authentication', 'validation', 'webscr',
-            'urgent', 'expired', 'limited', 'immediate', 'emergency',
-            'paypal', 'amazon', 'microsoft', 'apple', 'google', 'facebook',
-            'bank', 'banking', 'credit', 'debit', 'visa', 'mastercard',
-            'click', 'winner', 'prize', 'congratulations', 'claim',
-            'security', 'protection', 'warning', 'alert', 'notification',
-            'loading', 'process', 'redirect', 'transfer', 'bitcoin', 'crypto',
-            'phishing', 'malware', 'virus', 'download', 'install'
-        ];
-        
-        static URL_SHORTENERS = [
-            'bit.ly', 'tinyurl.com', 'goo.gl', 't.co', 'ow.ly', 'short.link',
-            'shorturl.at', 'tiny.cc', 'is.gd', 'buff.ly', 'adf.ly', 'rb.gy',
-            'cutt.ly', 'shrtco.de', 'tiny.one'
-        ];
-        
-        static LEGITIMATE_DOMAINS = [
-            'google.com', 'facebook.com', 'amazon.com', 'microsoft.com',
-            'apple.com', 'github.com', 'stackoverflow.com', 'wikipedia.org',
-            'paypal.com', 'ebay.com', 'twitter.com', 'instagram.com',
-            'linkedin.com', 'youtube.com', 'netflix.com'
-        ];
-        
-        // ML Models Status
-        static mlModels = {
-            randomForest: 'Enhanced Random Forest (5 Decision Trees)',
-            xgboost: 'Enhanced XGBoost Gradient Boosting',
-            isLoaded: true
-        };
-        
-        // Initialize ML Models (No TensorFlow needed)
-        static async initializeMLModels() {
-            console.log('🤖 Loading Enhanced ML Models...');
-            this.mlModels.isLoaded = true;
-            console.log('✅ Random Forest (5 Trees) & XGBoost Models loaded successfully!');
-            return true;
-        }
-        
-        static normalizeURL(url) {
-            if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                url = 'https://' + url;
-            }
-            
-            try {
-                const urlObj = new URL(url);
-                return {
-                    normalized: url,
-                    domain: urlObj.hostname.toLowerCase(),
-                    path: urlObj.pathname + urlObj.search,
-                    fullUrl: url.toLowerCase(),
-                    isValid: true
-                };
-            } catch (e) {
-                return {
-                    normalized: url,
-                    domain: url.split('/')[0].toLowerCase(),
-                    path: url.substring(url.indexOf('/') + 1),
-                    fullUrl: url.toLowerCase(),
-                    isValid: false
-                };
-            }
-        }
-        
-        // ENHANCED: Advanced Feature Engineering
-        static extractAdvancedFeatures(url) {
-            const features = {};
-            
-            try {
-                const urlData = this.normalizeURL(url);
-                const domain = urlData.domain;
-                const path = urlData.path;
-                
-                // Basic features
-                const ipPattern = /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/;
-                features.having_IP = ipPattern.test(domain) ? 1.0 : 0.0;
-                features.URL_Length = url.length > 150 ? 1.0 : (url.length > 75 ? 0.5 : 0.0);
-                features.having_At = url.includes('@') ? 1.0 : 0.0;
-                
-                const pathSegments = path.split('/').filter(seg => seg.length > 0);
-                features.URL_Depth = pathSegments.length > 4 ? 1.0 : (pathSegments.length > 2 ? 0.5 : 0.0);
-                features.Redirection = url.split('//').length > 2 ? 1.0 : 0.0;
-                features.https_Domain = url.startsWith('https://') ? 0.0 : 1.0;
-                features.TinyURL = this.URL_SHORTENERS.some(s => domain.includes(s)) ? 1.0 : 0.0;
-                features.Prefix_Suffix = domain.includes('-') ? 1.0 : 0.0;
-                
-                // Advanced Lexical Features
-                features.URL_Entropy = this.calculateURLEntropy(url);
-                features.Vowel_Consonant_Ratio = this.getVowelConsonantRatio(domain);
-                features.Digit_Ratio = this.getDigitRatio(domain);
-                features.Special_Char_Ratio = this.getSpecialCharRatio(url);
-                
-                // Structural Features
-                features.Suspicious_File_Extension = this.detectSuspiciousFiles(path);
-                features.Port_in_URL = this.detectNonStandardPort(url);
-                features.Punycode_Domain = this.detectPunycode(domain);
-                
-                // Enhanced keyword analysis
-                let keywordCount = 0;
-                for (let keyword of this.SUSPICIOUS_KEYWORDS) {
-                    if (url.toLowerCase().includes(keyword)) keywordCount++;
-                }
-                features.Suspicious_Keywords = keywordCount >= 4 ? 1.0 : (keywordCount >= 2 ? 0.75 : (keywordCount >= 1 ? 0.4 : 0.0));
-                
-                // Enhanced TLD analysis
-                const suspiciousTLD = ['.tk', '.ml', '.ga', '.cf', '.click', '.top', '.pw', '.xyz', '.download', '.stream'];
-                features.Suspicious_TLD = suspiciousTLD.some(tld => domain.endsWith(tld)) ? 1.0 : 0.0;
-                
-                // Enhanced pattern detection
-                const mainDomain = domain.split('.')[domain.split('.').length - 2] || '';
-                features.Random_Pattern = this.isRandomPattern(mainDomain) ? 1.0 : 0.0;
-                
-                // Path brand spoofing
-                const brandSpoofing = this.detectPathBrandSpoofing(domain, path);
-                features.Path_Brand_Spoofing = brandSpoofing.detected ? 1.0 : 0.0;
-                
-                // Enhanced subdomain analysis
-                const subdomainCount = domain.split('.').length - 2;
-                features.Subdomain_Count = subdomainCount >= 3 ? 1.0 : (subdomainCount >= 2 ? 0.5 : 0.0);
-                
-                // Brand impersonation features
-                features.Homograph_Attack = this.detectHomographAttack(domain);
-                features.Typosquatting = this.detectTyposquatting(domain);
-                features.Brand_Keyword_Stuffing = this.detectBrandKeywordStuffing(url);
-                
-            } catch (e) {
-                console.error('Error extracting advanced features:', e);
-            }
-            
-            return features;
-        }
-        
-        // Advanced Lexical Analysis Methods
-        static calculateURLEntropy(url) {
-            const cleanUrl = url.replace(/https?:\/\//, '').toLowerCase();
-            const freq = {};
-            for (let char of cleanUrl) {
-                freq[char] = (freq[char] || 0) + 1;
-            }
-            
-            let entropy = 0;
-            const len = cleanUrl.length;
-            for (let char in freq) {
-                const p = freq[char] / len;
-                entropy -= p * Math.log2(p);
-            }
-            
-            return entropy > 4.0 ? 1.0 : (entropy > 3.0 ? 0.7 : (entropy > 2.5 ? 0.4 : 0.0));
-        }
-        
-        static getVowelConsonantRatio(domain) {
-            const vowels = (domain.match(/[aeiou]/g) || []).length;
-            const consonants = (domain.match(/[bcdfghjklmnpqrstvwxyz]/g) || []).length;
-            const ratio = consonants > 0 ? vowels / consonants : 0;
-            return ratio < 0.2 ? 1.0 : (ratio < 0.4 ? 0.5 : 0.0);
-        }
-        
-        static getDigitRatio(domain) {
-            const digits = (domain.match(/\d/g) || []).length;
-            const ratio = digits / domain.length;
-            return ratio > 0.3 ? 1.0 : (ratio > 0.1 ? 0.5 : 0.0);
-        }
-        
-        static getSpecialCharRatio(url) {
-            const specialChars = (url.match(/[!@#$%^&*()_+={}|:"<>?[\]\\;',.]/g) || []).length;
-            const ratio = specialChars / url.length;
-            return ratio > 0.15 ? 1.0 : (ratio > 0.08 ? 0.6 : 0.0);
-        }
-        
-        // Advanced Pattern Detection Methods
-        static detectSuspiciousFiles(path) {
-            const suspiciousExts = ['.exe', '.zip', '.rar', '.scr', '.bat', '.cmd', '.php', '.asp', '.jsp'];
-            const suspiciousFiles = ['loading.php', 'verify.html', 'update.asp', 'secure.php', 'login.jsp'];
-            
-            return suspiciousExts.some(ext => path.toLowerCase().includes(ext)) ||
-                   suspiciousFiles.some(file => path.toLowerCase().includes(file)) ? 1.0 : 0.0;
-        }
-        
-        static detectNonStandardPort(url) {
-            const portMatch = url.match(/:(\d+)/);
-            if (portMatch) {
-                const port = parseInt(portMatch[1]);
-                return (port !== 80 && port !== 443 && port !== 8080) ? 1.0 : 0.0;
-            }
-            return 0.0;
-        }
-        
-        static detectPunycode(domain) {
-            return domain.includes('xn--') ? 1.0 : 0.0;
-        }
-        
-        static detectHomographAttack(domain) {
-            const homographs = {
-                'a': ['а', 'ạ', 'ả', 'ã'], 'o': ['о', 'ọ', 'ỏ', 'õ'], 
-                'e': ['е', 'ẹ', 'ẻ', 'ẽ'], 'p': ['р', 'ṗ'], 'c': ['с', 'ċ']
-            };
-            
-            for (let [normal, variants] of Object.entries(homographs)) {
-                if (variants.some(variant => domain.includes(variant))) {
-                    return 1.0;
-                }
-            }
-            return 0.0;
-        }
-        
-        static detectTyposquatting(domain) {
-            const legitimateBrands = ['paypal', 'amazon', 'microsoft', 'apple', 'google'];
-            const typoPatterns = [
-                (brand) => domain.includes(brand.replace('a', 'e')),
-                (brand) => domain.includes(brand.replace('o', '0')),
-                (brand) => domain.includes(brand.replace('l', '1')),
-                (brand) => domain.includes(brand + 's'),
-                (brand) => domain.includes('secure' + brand)
-            ];
-            
-            for (let brand of legitimateBrands) {
-                if (typoPatterns.some(pattern => pattern(brand))) {
-                    return 1.0;
-                }
-            }
-            return 0.0;
-        }
-        
-        static detectBrandKeywordStuffing(url) {
-            const brands = ['paypal', 'amazon', 'microsoft', 'apple', 'google'];
-            const securityWords = ['secure', 'verify', 'update', 'login', 'account'];
-            
-            let brandCount = 0;
-            let securityCount = 0;
-            
-            for (let brand of brands) {
-                if (url.toLowerCase().includes(brand)) brandCount++;
-            }
-            
-            for (let word of securityWords) {
-                if (url.toLowerCase().includes(word)) securityCount++;
-            }
-            
-            return (brandCount >= 2 || (brandCount >= 1 && securityCount >= 2)) ? 1.0 : 0.0;
-        }
-        
-        // ENHANCED: Random Forest with 5 Decision Trees
-        static enhancedRandomForestClassification(features) {
-            const trees = [];
-            
-            // Tree 1: Focus on URL structure
-            let tree1Score = 0.0;
-            if (features.having_IP === 1.0) tree1Score += 0.3;
-            if (features.URL_Length >= 0.5) tree1Score += 0.25 * features.URL_Length;
-            if (features.URL_Depth >= 0.5) tree1Score += 0.2 * features.URL_Depth;
-            if (features.https_Domain === 1.0) tree1Score += 0.2;
-            if (features.having_At === 1.0) tree1Score += 0.25;
-            trees.push(Math.min(tree1Score, 1.0));
-            
-            // Tree 2: Focus on suspicious patterns
-            let tree2Score = 0.0;
-            if (features.Suspicious_Keywords >= 0.4) tree2Score += 0.4 * features.Suspicious_Keywords;
-            if (features.Random_Pattern === 1.0) tree2Score += 0.3;
-            if (features.Suspicious_TLD === 1.0) tree2Score += 0.25;
-            if (features.TinyURL === 1.0) tree2Score += 0.2;
-            if (features.Prefix_Suffix === 1.0) tree2Score += 0.15;
-            trees.push(Math.min(tree2Score, 1.0));
-            
-            // Tree 3: Focus on brand spoofing
-            let tree3Score = 0.0;
-            if (features.Path_Brand_Spoofing === 1.0) tree3Score += 0.5;
-            if (features.Homograph_Attack === 1.0) tree3Score += 0.4;
-            if (features.Typosquatting === 1.0) tree3Score += 0.35;
-            if (features.Brand_Keyword_Stuffing === 1.0) tree3Score += 0.3;
-            trees.push(Math.min(tree3Score, 1.0));
-            
-            // Tree 4: Focus on technical indicators
-            let tree4Score = 0.0;
-            if (features.Redirection === 1.0) tree4Score += 0.3;
-            if (features.Port_in_URL === 1.0) tree4Score += 0.25;
-            if (features.Punycode_Domain === 1.0) tree4Score += 0.4;
-            if (features.Suspicious_File_Extension === 1.0) tree4Score += 0.25;
-            if (features.Subdomain_Count >= 0.5) tree4Score += 0.2 * features.Subdomain_Count;
-            trees.push(Math.min(tree4Score, 1.0));
-            
-            // Tree 5: Focus on advanced features
-            let tree5Score = 0.0;
-            if (features.URL_Entropy >= 0.5) tree5Score += 0.3 * features.URL_Entropy;
-            if (features.Vowel_Consonant_Ratio >= 0.5) tree5Score += 0.25 * features.Vowel_Consonant_Ratio;
-            if (features.Digit_Ratio >= 0.5) tree5Score += 0.2 * features.Digit_Ratio;
-            if (features.Special_Char_Ratio >= 0.5) tree5Score += 0.25 * features.Special_Char_Ratio;
-            trees.push(Math.min(tree5Score, 1.0));
-            
-            // Random Forest: Average of all trees (Majority Voting)
-            const finalScore = trees.reduce((sum, treeScore) => sum + treeScore, 0) / trees.length;
-            const confidence = Math.min(Math.max(finalScore, 0.0), 1.0);
-            
-            return {
-                prediction: finalScore > 0.35 ? 'phishing' : 'legitimate',
-                confidence: finalScore > 0.35 ? confidence : 1.0 - confidence,
-                algorithm: 'Enhanced Random Forest (5 Trees)',
-                score: finalScore,
-                treeVotes: trees.map((score, i) => `Tree${i+1}: ${(score*100).toFixed(1)}%`).join(', ')
-            };
-        }
-        
-        // ENHANCED: XGBoost Gradient Boosting
-        static enhancedXGBoostClassification(features) {
-            // Initial prediction
-            let prediction = 0.5; // Starting point
-            const learningRate = 0.1;
-            const numRounds = 5;
-            
-            // Feature importance weights for XGBoost
-            const featureWeights = {
-                having_IP: 0.28, having_At: 0.32, URL_Length: 0.22,
-                https_Domain: 0.18, TinyURL: 0.25, Prefix_Suffix: 0.18,
-                URL_Depth: 0.20, Redirection: 0.28, Suspicious_Keywords: 0.38,
-                Suspicious_TLD: 0.32, Random_Pattern: 0.30, Path_Brand_Spoofing: 0.48,
-                Subdomain_Count: 0.22, URL_Entropy: 0.28, Vowel_Consonant_Ratio: 0.22,
-                Digit_Ratio: 0.20, Special_Char_Ratio: 0.24, Suspicious_File_Extension: 0.28,
-                Port_in_URL: 0.22, Punycode_Domain: 0.38, Homograph_Attack: 0.42,
-                Typosquatting: 0.38, Brand_Keyword_Stuffing: 0.32
-            };
-            
-            const boostingRounds = [];
-            
-            // Gradient Boosting iterations
-            for (let round = 0; round < numRounds; round++) {
-                let roundScore = 0.0;
-                let featureCount = 0;
-                
-                // Calculate weighted feature contribution
-                for (let [feature, weight] of Object.entries(featureWeights)) {
-                    if (features[feature] !== undefined) {
-                        roundScore += weight * features[feature];
-                        featureCount++;
-                    }
-                }
-                
-                if (featureCount > 0) {
-                    roundScore = roundScore / featureCount; // Normalize
-                    
-                    // Gradient boosting: residual learning
-                    const residual = roundScore - prediction;
-                    prediction += learningRate * residual;
-                    
-                    boostingRounds.push(`Round${round+1}: ${(roundScore*100).toFixed(1)}%`);
-                }
-            }
-            
-            // Final prediction normalization
-            prediction = Math.min(Math.max(prediction, 0.0), 1.0);
-            
-            return {
-                prediction: prediction > 0.30 ? 'phishing' : 'legitimate',
-                confidence: prediction > 0.30 ? prediction : 1.0 - prediction,
-                algorithm: 'Enhanced XGBoost (5 Rounds)',
-                score: prediction,
-                boostingDetails: boostingRounds.join(', ')
-            };
-        }
-        
-        // ENHANCED: Dynamic Ensemble with Adaptive Weights
-        static dynamicEnsembleDecision(ruleResult, rfResult, xgbResult, url) {
-            let phishingVotes = 0.0;
-            let legitimateVotes = 0.0;
-            
-            // Dynamic weight adjustment
-            let ruleWeight = 0.4;
-            let rfWeight = 0.3;
-            let xgbWeight = 0.3;
+    // UI MAPPER: backend response -> UI display
+    function backendToEnhancedResult(data, url) {
+        // Penentuan kategori dan confidence
+        const isPhishing = data.final_label === 1;
+        let category = "safe";
+        let resultText = "✅ SAFE: No significant threats detected";
+        let confidence = 0.9;
 
-            // High confidence rule-based override - ONLY for legitimate domains
-            if (ruleResult.category === 'safe' && ruleResult.confidence > 0.9 && 
-                ruleResult.result.includes('Legitimate domain verified')) {
-                ruleWeight = 0.8;
-                rfWeight = 0.1;
-                xgbWeight = 0.1;
-                console.log('🛡️ HIGH CONFIDENCE LEGITIMATE DOMAIN - Prioritizing rule-based result');
-            }
-            // If rule-based says phishing with high confidence
-            else if (ruleResult.category === 'phishing' && ruleResult.confidence > 0.9) {
-                ruleWeight = 0.6;
-                rfWeight = 0.2;
-                xgbWeight = 0.2;
-            }
-            // If ML models strongly detect phishing but rules say safe (potential false negative)
-            else if (ruleResult.category === 'safe' && 
-                    rfResult.prediction === 'phishing' && xgbResult.prediction === 'phishing' &&
-                    (rfResult.confidence + xgbResult.confidence) / 2 > 0.6) {
-                ruleWeight = 0.2; // Reduce rule weight for potential false negative
-                rfWeight = 0.4;
-                xgbWeight = 0.4;
-                console.log('⚠️ ML models detect phishing but rules say safe - Increasing ML weight');
-            }
-            else if (ruleResult.confidence > 0.8) {
-                ruleWeight = 0.5; rfWeight = 0.25; xgbWeight = 0.25;
-            } else if (ruleResult.confidence < 0.6) {
-                ruleWeight = 0.3; rfWeight = 0.35; xgbWeight = 0.35;
-            }
-            
-            const algorithmsUsed = [];
-            
-            // Rule-based voting
-            if (ruleResult.result.includes('PHISHING') || ruleResult.result.includes('🚨')) {
-                phishingVotes += ruleWeight * ruleResult.confidence;
-            } else if (ruleResult.result.includes('MENCURIGAKAN') || ruleResult.result.includes('⚠️')) {
-                phishingVotes += ruleWeight * ruleResult.confidence * 0.8;
-                legitimateVotes += ruleWeight * ruleResult.confidence * 0.2;
-            } else if (ruleResult.category === 'error') {
-                phishingVotes += ruleWeight * 0.7;
-            } else if (ruleResult.category === 'safe' || ruleResult.result.includes('✅')) {
-                legitimateVotes += ruleWeight * ruleResult.confidence;
-            } else {
-                legitimateVotes += ruleWeight * ruleResult.confidence;
-            }
-            algorithmsUsed.push('Rules');
-            
-            // Random Forest voting
-            if (rfResult.prediction === 'phishing') {
-                phishingVotes += rfWeight * rfResult.confidence;
-            } else {
-                legitimateVotes += rfWeight * rfResult.confidence;
-            }
-            algorithmsUsed.push('RF');
-            
-            // XGBoost voting
-            if (xgbResult.prediction === 'phishing') {
-                phishingVotes += xgbWeight * xgbResult.confidence;
-            } else {
-                legitimateVotes += xgbWeight * xgbResult.confidence;
-            }
-            algorithmsUsed.push('XGB');
-            
-            const totalVotes = phishingVotes + legitimateVotes;
-            const confidence = totalVotes > 0 ? Math.max(phishingVotes, legitimateVotes) / totalVotes : 0.5;
-            
-            console.log(`🎯 Dynamic Weights - Rule: ${ruleWeight.toFixed(2)}, RF: ${rfWeight.toFixed(2)}, XGB: ${xgbWeight.toFixed(2)}`);
-            console.log(`📊 Votes - Phishing: ${phishingVotes.toFixed(3)}, Legitimate: ${legitimateVotes.toFixed(3)}`);
-            
-            let result, category;
-            if (phishingVotes > legitimateVotes) {
-                if (confidence > 0.85) {
-                    result = '🚨 PHISHING: Ultra-high confidence detection';
-                    category = 'phishing';
-                } else if (confidence > 0.7) {
-                    result = '🚨 PHISHING: High confidence detection';
-                    category = 'phishing';
-                } else if (confidence > 0.55) {
-                    result = '🚨 PHISHING: Moderate confidence detection';
-                    category = 'phishing';
-                } else {
-                    result = '⚠️ LIKELY PHISHING: Low confidence detection';
-                    category = 'phishing';
-                }
-            } else {
-                if (confidence > 0.9) {
-                    result = '✅ SAFE: Ultra-high confidence legitimate';
-                    category = 'safe';
-                } else if (confidence > 0.75) {
-                    result = '✅ SAFE: High confidence legitimate';
-                    category = 'safe';
-                } else if (confidence > 0.6) {
-                    result = '✅ LIKELY SAFE: Moderate confidence';
-                    category = 'safe';
-                } else {
-                    result = '🟡 UNCERTAIN: Requires manual verification';
-                    category = 'suspicious';
-                }
-            }
-            
-            return {
-                result: result,
-                algorithm: `Dynamic Ensemble (${algorithmsUsed.join(" + ")})`,
-                confidence: confidence,
-                category: category,
-                votingDetails: {
-                    phishingVotes: phishingVotes,
-                    legitimateVotes: legitimateVotes,
-                    totalVotes: totalVotes,
-                    ruleResult: ruleResult,
-                    rfResult: rfResult,
-                    xgbResult: xgbResult,
-                    dynamicWeights: { rule: ruleWeight, rf: rfWeight, xgb: xgbWeight }
-                }
-            };
+        if (data.category === "Phishing" || isPhishing) {
+            category = "phishing";
+            resultText = "🚨 PHISHING: Detected by ML/Rule-based";
+            confidence = 0.85;
+        } else if (data.category === "Suspicious") {
+            category = "suspicious";
+            resultText = "⚠️ SUSPICIOUS: Multiple risk indicators";
+            confidence = 0.65;
+        } else if (data.category === "Caution") {
+            category = "caution";
+            resultText = "🟡 CAUTION: Some risk factors detected";
+            confidence = 0.55;
         }
-        
-        // MAIN: Ultra-Enhanced Detection Pipeline
-        static async ultraEnhancedPhishingDetection(url) {
-            try {
-                console.log(`\n=== ULTRA-ENHANCED ANALYSIS v2.0: ${url} ===`);
-                
-                // Step 1: Initialize ML models
-                if (!this.mlModels.isLoaded) {
-                    await this.initializeMLModels();
-                }
-                
-                // Step 2: Enhanced rule-based filtering
-                const ruleResult = this.ruleBasedFiltering(url);
-                console.log('Enhanced Rule result:', ruleResult);
-                
-                // Step 3: Extract advanced features
-                const features = this.extractAdvancedFeatures(url);
-                console.log('Advanced Features:', features);
-                
-                // Step 4: ML Classifications (Random Forest + XGBoost)
-                const rfResult = this.enhancedRandomForestClassification(features);
-                const xgbResult = this.enhancedXGBoostClassification(features);
-                
-                console.log('Enhanced Random Forest result:', rfResult);
-                console.log('Enhanced XGBoost result:', xgbResult);
-                
-                // Step 5: Dynamic ensemble decision
-                const finalResult = this.dynamicEnsembleDecision(ruleResult, rfResult, xgbResult, url);
-                console.log('Final Enhanced Result:', finalResult);
-                
-                return finalResult;
-                
-            } catch (e) {
-                console.error('Error in ultra-enhanced detection:', e);
-                return {
-                    result: '❌ ERROR: Unable to analyze URL',
-                    algorithm: 'Error Handler',
-                    confidence: 0.0,
-                    category: 'error'
-                };
-            }
+
+        // Voting weights: rule-based tetap jadi penyaring awal, tapi ML lebih dominan
+        const weights = { rule: 0.2, rf: 0.4, xgb: 0.4 };
+
+        // Voting calculation (contoh sederhana)
+        let phishingScore = 0;
+        phishingScore += (data.category === "Phishing" ? weights.rule : 0);
+        phishingScore += (data.rf_pred === 1 ? weights.rf : 0);
+        phishingScore += (data.xgb_pred === 1 ? weights.xgb : 0);
+
+        let legitimateScore = 1 - phishingScore;
+
+        return {
+        result: `${resultText} (Risk: ${data.risk_score})`,
+        algorithm: "Rule-based + Random Forest + XGBoost + Stacking (LR)",
+        confidence: confidence,
+        category: category,
+        details: [
+            `Rule Flag: ${data.rule_flag}`,
+            `RF: ${data.rf_pred}, XGB: ${data.xgb_pred}`,
+            `Stacking: ${data.stack_pred === null ? "N/A" : data.stack_pred}`
+        ],
+        votingDetails: {
+            phishingVotes: phishingScore,
+            legitimateVotes: legitimateScore,
+            totalVotes: 1.0,
+            ruleResult: { result: data.category, confidence: 0.8 },
+            rfResult: { prediction: data.rf_pred === 1 ? "phishing" : "legitimate", confidence: 0.7 },
+            xgbResult: { prediction: data.xgb_pred === 1 ? "phishing" : "legitimate", confidence: 0.75 },
+            dynamicWeights: weights
         }
-        
-        // Enhanced Rule-based Filtering
-        static ruleBasedFiltering(url) {
-                let riskScore = 0;
-                let detectedIssues = [];
-                
-                try {
-                    const urlData = this.normalizeURL(url);
-                    const domain = urlData.domain;
-                    const path = urlData.path;
-                    
-                    console.log('Analyzing URL:', {
-                        original: url,
-                        normalized: urlData.normalized,
-                        domain: domain,
-                        path: path,
-                        isValid: urlData.isValid
-                    });
-                    
-                    // Rule 1: Legitimate domains check - HANYA untuk domain yang benar-benar legitimate
-                    let isLegitimate = false;
-                    for (let legit of this.LEGITIMATE_DOMAINS) {
-                        if (domain === legit || domain === `www.${legit}`) {
-                            const pathContainsBrands = this.pathContainsBrands(path);
-                            if (pathContainsBrands.length > 0) {
-                                riskScore += 8;
-                                detectedIssues.push(`Domain legitimate tapi PATH mencurigakan: ${pathContainsBrands.join(', ')}`);
-                                break;
-                            } else {
-                                isLegitimate = true;
-                                return {
-                                    result: '✅ SAFE: Legitimate domain verified',
-                                    algorithm: 'Enhanced Rule-based (Whitelist)',
-                                    confidence: 0.95,
-                                    details: [`Verified legitimate domain: ${legit}`],
-                                    category: 'safe',
-                                    riskScore: 0
-                                };
-                            }
-                        }
-                    }
-                    
-                    // JIKA BUKAN LEGITIMATE DOMAIN, LANJUTKAN ANALISIS RISIKO
-                    
-                    // Rule 2: IP Address check
-                    const ipPattern = /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/;
-                    if (ipPattern.test(domain)) {
-                        riskScore += 8;
-                        detectedIssues.push('IP address instead of domain name');
-                    }
-                    
-                    // Rule 3: Having @ symbol
-                    if (url.includes('@')) {
-                        riskScore += 6;
-                        detectedIssues.push('Contains @ symbol (credential harvesting)');
-                    }
-                    
-                    // Rule 4: URL Length
-                    if (url.length > 150) {
-                        riskScore += 5;
-                        detectedIssues.push(`Very long URL (${url.length} characters)`);
-                    } else if (url.length > 75) {
-                        riskScore += 2;
-                        detectedIssues.push(`Long URL (${url.length} characters)`);
-                    }
-                    
-                    // Rule 5: HTTPS check
-                    if (!url.startsWith('https://')) {
-                        riskScore += 4;
-                        detectedIssues.push('No HTTPS encryption');
-                    }
-                    
-                    // Rule 6: URL Shorteners
-                    if (this.URL_SHORTENERS.some(s => domain.includes(s))) {
-                        riskScore += 6;
-                        detectedIssues.push('URL shortening service detected');
-                    }
-                    
-                    // Rule 7: Prefix/Suffix in domain
-                    if (domain.includes('-')) {
-                        riskScore += 3;
-                        detectedIssues.push('Hyphen in domain name');
-                    }
-                    
-                    // Rule 8: URL Depth
-                    const pathSegments = path.split('/').filter(seg => seg.length > 0);
-                    if (pathSegments.length > 4) {
-                        riskScore += 4;
-                        detectedIssues.push(`Deep URL structure (${pathSegments.length} levels)`);
-                    } else if (pathSegments.length > 2) {
-                        riskScore += 2;
-                        detectedIssues.push(`Moderate URL depth (${pathSegments.length} levels)`);
-                    }
-                    
-                    // Rule 9: Redirection
-                    if (url.split('//').length > 2) {
-                        riskScore += 6;
-                        detectedIssues.push('Multiple redirections detected');
-                    }
-                    
-                    // Rule 10: Suspicious Keywords
-                    let keywordCount = 0;
-                    const foundKeywords = [];
-                    for (let keyword of this.SUSPICIOUS_KEYWORDS) {
-                        if (url.toLowerCase().includes(keyword)) {
-                            keywordCount++;
-                            foundKeywords.push(keyword);
-                        }
-                    }
-                    
-                    if (keywordCount >= 4) {
-                        riskScore += 8;
-                        detectedIssues.push(`Many suspicious keywords: ${foundKeywords.slice(0, 5).join(', ')}`);
-                    } else if (keywordCount >= 2) {
-                        riskScore += 5;
-                        detectedIssues.push(`Suspicious keywords: ${foundKeywords.join(', ')}`);
-                    } else if (keywordCount >= 1) {
-                        riskScore += 2;
-                        detectedIssues.push(`Keyword detected: ${foundKeywords[0]}`);
-                    }
-                    
-                    // Rule 11: Suspicious TLD (CRITICAL untuk .top domain)
-                    const suspiciousTLD = ['.tk', '.ml', '.ga', '.cf', '.click', '.top', '.pw', '.xyz', '.download', '.stream'];
-                    const foundTLD = suspiciousTLD.find(tld => domain.endsWith(tld));
-                    if (foundTLD) {
-                        riskScore += 7;
-                        detectedIssues.push(`Suspicious TLD: ${foundTLD}`);
-                    }
-                    
-                    // Rule 12: Random Pattern in domain (CRITICAL untuk smmhejtkx.olghvlbkcdqtscd)
-                    const mainDomain = domain.split('.')[domain.split('.').length - 2] || '';
-                    if (this.isRandomPattern(mainDomain)) {
-                        riskScore += 6;
-                        detectedIssues.push(`Random pattern in domain: ${mainDomain}`);
-                    }
-                    
-                    // Rule 13: Path-based Brand Spoofing
-                    const brandSpoofing = this.detectPathBrandSpoofing(domain, path);
-                    if (brandSpoofing.detected) {
-                        riskScore += 10;
-                        detectedIssues.push(`PATH SPOOFING: ${brandSpoofing.details}`);
-                    }
-                    
-                    // Rule 14: Subdomain Count
-                    const subdomainCount = domain.split('.').length - 2;
-                    if (subdomainCount >= 3) {
-                        riskScore += 5;
-                        detectedIssues.push(`Many subdomains (${subdomainCount})`);
-                    } else if (subdomainCount >= 2) {
-                        riskScore += 2;
-                        detectedIssues.push(`Multiple subdomains (${subdomainCount})`);
-                    }
-                    
-                    // Rule 15: ENHANCED - Suspicious domain patterns
-                    if (domain.includes('olghvlbkcdqtscd') || domain.includes('smmhejtkx')) {
-                        riskScore += 10;
-                        detectedIssues.push('Extremely suspicious random domain pattern');
-                    }
-                    
-                    // Rule 16: ENHANCED - Short random path segments
-                    const pathParts = path.split('/').filter(p => p.length > 0);
-                    for (let part of pathParts) {
-                        if (part.length <= 6 && /^[a-z]+$/.test(part) && !/[aeiou]/.test(part)) {
-                            riskScore += 4;
-                            detectedIssues.push(`Suspicious path segment: ${part}`);
-                            break;
-                        }
-                    }
-                    
-                    // FINAL DECISION dengan threshold yang benar
-                    const confidence = Math.min(riskScore / 30.0, 1.0); // Increased denominator
-                    
-                    let result, category;
-                    if (riskScore >= 20) {
-                        result = `🚨 PHISHING: Critical threat detected (Risk: ${riskScore})`;
-                        category = 'phishing';
-                    } else if (riskScore >= 15) {
-                        result = `🚨 PHISHING: High confidence detection (Risk: ${riskScore})`;
-                        category = 'phishing';
-                    } else if (riskScore >= 10) {
-                        result = `🚨 PHISHING: Moderate confidence (Risk: ${riskScore})`;
-                        category = 'phishing';
-                    } else if (riskScore >= 6) {
-                        result = `⚠️ SUSPICIOUS: Multiple risk indicators (Risk: ${riskScore})`;
-                        category = 'suspicious';
-                    } else if (riskScore >= 3) {
-                        result = `🟡 CAUTION: Some risk factors detected (Risk: ${riskScore})`;
-                        category = 'suspicious';
-                    } else {
-                        result = `✅ SAFE: No significant threats detected (Risk: ${riskScore})`;
-                        category = 'safe';
-                    }
-                    
-                    return {
-                        result: result,
-                        algorithm: 'Ultra-Enhanced Rule-based v2.0',
-                        confidence: riskScore >= 3 ? confidence : Math.max(0.8, 1.0 - (riskScore * 0.1)),
-                        details: detectedIssues.length > 0 ? detectedIssues : ['All security checks passed successfully'],
-                        category: category,
-                        riskScore: riskScore
-                    };
-                    
-                } catch (e) {
-                    console.error('Error in enhanced rule-based filtering:', e);
-                    return {
-                        result: '❌ ERROR: Invalid URL format',
-                        algorithm: 'Enhanced Rule-based',
-                        confidence: 0.0,
-                        details: ['Unable to process URL'],
-                        category: 'error',
-                        riskScore: 0
-                    };
-                }
-            }
-        
-        // Helper methods
-        static pathContainsBrands(path) {
-            const brands = ['paypal', 'amazon', 'microsoft', 'apple', 'google', 'facebook', 'bank', 'visa', 'mastercard'];
-            const foundBrands = [];
-            
-            for (let brand of brands) {
-                if (path.toLowerCase().includes(brand)) {
-                    foundBrands.push(brand);
-                }
-            }
-            
-            return foundBrands;
-        }
-        
-        static detectPathBrandSpoofing(domain, path) {
-            const pathLower = path.toLowerCase();
-            const domainLower = domain.toLowerCase();
-            
-            const legitimateBrands = {
-                'paypal': 'paypal.com',
-                'amazon': 'amazon.com',
-                'microsoft': 'microsoft.com',
-                'apple': 'apple.com',
-                'google': 'google.com',
-                'facebook': 'facebook.com'
-            };
-            
-            for (let [brand, legitimateDomain] of Object.entries(legitimateBrands)) {
-                if (pathLower.includes(brand) && !domainLower.includes(legitimateDomain.replace('.com', ''))) {
-                    const suspiciousPatterns = [
-                        `${brand}.co`, `${brand}/`, `${brand}-`, `${brand}_`, `${brand}.`,
-                        `webscr`, `cgi-bin`, 'loading.php'
-                    ];
-                    
-                    const matchedPatterns = suspiciousPatterns.filter(pattern => 
-                        pathLower.includes(pattern) || domainLower.includes(pattern)
-                    );
-                    
-                    if (matchedPatterns.length > 0) {
-                        return {
-                            detected: true,
-                            details: `ADVANCED SPOOFING: Domain "${domain}" impersonating ${brand} via path/patterns: ${matchedPatterns.join(', ')}`
-                        };
-                    }
-                }
-            }
-            
-            return { detected: false, details: '' };
-        }
-        
-        static isRandomPattern(domain) {
-            if (domain.length < 4) return false;
-            
-            // Pattern untuk deteksi domain random
-            const patterns = [
-                /^[a-z]{7,}$/, // All lowercase, 7+ chars
-                /([a-z])\1{2,}/, // Repeated characters
-                /^[bcdfghjklmnpqrstvwxyz]{5,}$/, // Only consonants, 5+ chars
-                /[qxz]{2,}/, // Multiple rare letters
-                /^(dghjdgf|smmhejtkx|olghvlbkcdqtscd)$/i, // Known phishing patterns
-                /^[a-z]{4}[a-z]{4}[a-z]+$/ // Pattern seperti smmhejtkx
-            ];
-            
-            // Calculate entropy
-            const entropy = this.calculateEntropy(domain);
-            
-            // Calculate vowel ratio
-            const vowels = (domain.match(/[aeiou]/g) || []).length;
-            const vowelRatio = vowels / domain.length;
-            
-            // Calculate consonant clusters
-            const consonantClusters = (domain.match(/[bcdfghjklmnpqrstvwxyz]{4,}/g) || []).length;
-            
-            // Check for specific suspicious patterns
-            const hasSuspiciousPattern = patterns.some(pattern => pattern.test(domain));
-            
-            // More aggressive detection for obvious random strings
-            const isHighEntropy = entropy > 3.5; // Lowered threshold
-            const isLowVowelRatio = vowelRatio < 0.2; // Keep threshold
-            const hasConsonantClusters = consonantClusters > 0;
-            
-            // Special check for the exact patterns we're seeing
-            const knownBadPatterns = [
-                'smmhejtkx', 'olghvlbkcdqtscd', 'dghjdgf'
-            ];
-            const isKnownBad = knownBadPatterns.some(bad => domain.includes(bad));
-            
-            console.log(`Domain: ${domain}, Entropy: ${entropy.toFixed(2)}, VowelRatio: ${vowelRatio.toFixed(2)}, Clusters: ${consonantClusters}, KnownBad: ${isKnownBad}`);
-            
-            return hasSuspiciousPattern || isHighEntropy || isLowVowelRatio || hasConsonantClusters || isKnownBad;
-        }
-        
-        static calculateEntropy(str) {
-            const freq = {};
-            for (let char of str) {
-                freq[char] = (freq[char] || 0) + 1;
-            }
-            
-            let entropy = 0;
-            const len = str.length;
-            for (let char in freq) {
-                const p = freq[char] / len;
-                entropy -= p * Math.log2(p);
-            }
-            
-            return entropy;
-        }
-    }
-    
-    // Display function DENGAN PERBAIKAN LOGIKA ICON
+    };
+}
+
+    // Display function
     function displayEnhancedResult(result, url) {
         const resultDiv = document.getElementById('result');
         const confidencePercent = (result.confidence * 100).toFixed(1);
@@ -1541,7 +742,6 @@
         let resultIcon = '❓'; 
         let threatLevel = 10;
         
-        // --- PERBAIKAN LOGIKA ICON BERDASARKAN KATEGORI ---
         if (result.category === 'phishing') {
             resultIcon = '🚨'; 
             resultClass = 'phishing';
@@ -1555,7 +755,6 @@
             resultClass = 'safe';
             threatLevel = Math.max(5, 20 - (result.confidence * 15));
         }
-        // --- PERBAIKAN SELESAI ---
         
         let algorithmBreakdown = '';
         let mlModelStatus = '';
@@ -1567,32 +766,36 @@
             algorithmBreakdown = `
                 <div class="algorithm-breakdown">
                     <div class="algorithm-card">
-                        <div class="algorithm-name">Enhanced Rule-based v2.0</div>
-                        <div class="algorithm-result">${vd.ruleResult.result.split(':')[0]}</div>
+                        <div class="algorithm-name">Rule-based</div>
+                        <div class="algorithm-result">${vd.ruleResult.result}</div>
                         <div class="algorithm-confidence">${(vd.ruleResult.confidence * 100).toFixed(1)}% (${(dw.rule * 100).toFixed(0)}% weight)</div>
                     </div>
                     <div class="algorithm-card">
-                        <div class="algorithm-name">Random Forest (5 Trees)</div>
+                        <div class="algorithm-name">Random Forest</div>
                         <div class="algorithm-result">${vd.rfResult.prediction}</div>
                         <div class="algorithm-confidence">${(vd.rfResult.confidence * 100).toFixed(1)}% (${(dw.rf * 100).toFixed(0)}% weight)</div>
                     </div>
                     <div class="algorithm-card">
-                        <div class="algorithm-name">XGBoost (5 Rounds)</div>
+                        <div class="algorithm-name">XGBoost</div>
                         <div class="algorithm-result">${vd.xgbResult.prediction}</div>
                         <div class="algorithm-confidence">${(vd.xgbResult.confidence * 100).toFixed(1)}% (${(dw.xgb * 100).toFixed(0)}% weight)</div>
+                    </div>
+                    <div class="algorithm-card">
+                        <div class="algorithm-name">Logistic Regression Stacking</div>
+                        <div class="algorithm-result">${result.stack_pred === 1 ? "phishing" : (result.stack_pred === 0 ? "legitimate" : "N/A")}</div>
+                        <div class="algorithm-confidence">Dynamic Ensemble</div>
                     </div>
                 </div>
             `;
             
             mlModelStatus = `
                 <div class="ml-model-status">
-                    <div class="detail-title">🤖 ML Model Status v2.0</div>
+                    <div class="detail-title">🤖 ML Model Status</div>
                     <div class="detail-content">
-                        ✅ Enhanced Random Forest (5 Decision Trees) - ACTIVE<br>
-                        ✅ Enhanced XGBoost (Gradient Boosting) - ACTIVE<br>
-                        Dynamic Weight Adjustment: <strong>ACTIVE</strong><br>
-                        Advanced Feature Set: <strong>20+ features analyzed</strong><br>
-                        Ensemble Method: <strong>Random Forest + XGBoost + Rule-based</strong>
+                        ✅ Random Forest - ACTIVE<br>
+                        ✅ XGBoost - ACTIVE<br>
+                        ✅ Stacking (LR) - ACTIVE<br>
+                        Ensemble Method: <strong>RF + XGB + LR</strong>
                     </div>
                 </div>
             `;
@@ -1645,27 +848,16 @@
                     
                     ${result.votingDetails ? `
                     <div class="detail-card">
-                        <div class="detail-title">🗳️ Dynamic Voting Results</div>
+                        <div class="detail-title">🗳️ Voting Results</div>
                         <div class="detail-content">
                             Phishing: <strong>${(result.votingDetails.phishingVotes * 100).toFixed(1)}%</strong><br>
-                            Legitimate: <strong>${(result.votingDetails.legitimateVotes * 100).toFixed(1)}%</strong><br>
-                            <em>Weights dynamically adjusted based on confidence</em>
+                            Legitimate: <strong>${(result.votingDetails.legitimateVotes * 100).toFixed(1)}%</strong>
                         </div>
                     </div>
                     ` : ''}
                 </div>
                 
                 ${algorithmBreakdown}
-                
-                <div class="detail-card" style="margin-top: 25px;">
-                    <div class="detail-title">🧠 Ultra-Enhanced AI System v2.0</div>
-                    <div class="detail-content">
-                        This <strong>next-generation cybersecurity system</strong> features Enhanced Random Forest with 5 decision trees, 
-                        XGBoost gradient boosting with 5 rounds, advanced rule-based filtering with 20+ features 
-                        (lexical analysis, homograph detection, brand impersonation), and dynamic ensemble weighting. 
-                        <strong>Estimated accuracy: 96.8%</strong> with sophisticated pattern recognition capabilities.
-                    </div>
-                </div>
             </div>
         `;
     }
@@ -1675,7 +867,7 @@
         document.getElementById('urlInput').focus();
     }
     
-    // Main analyze function
+    // Main analyze function (Backend Flask)
     async function analyzeURL() {
         const urlInput = document.getElementById('urlInput');
         const analyzeBtn = document.getElementById('analyzeBtn');
@@ -1693,23 +885,38 @@
         loading.style.display = 'block';
         resultDiv.innerHTML = '';
         
-        setTimeout(async () => {
-            try {
-                const result = await UltraAdvancedPhishingDetector.ultraEnhancedPhishingDetection(url);
-                displayEnhancedResult(result, url);
-            } catch (e) {
+        try {
+            const res = await fetch('/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
                 displayEnhancedResult({
-                    result: '❌ ERROR: Unable to analyze URL',
-                    algorithm: 'Error Handler',
+                    result: `❌ ERROR: ${data.error || "Gagal memproses URL"}`,
+                    algorithm: 'Backend',
                     confidence: 0.0,
-                    details: [e.message],
+                    details: [],
                     category: 'error'
                 }, url);
+            } else {
+                const uiResult = backendToEnhancedResult(data, url);
+                displayEnhancedResult(uiResult, url);
             }
-            
+        } catch (e) {
+            displayEnhancedResult({
+                result: '❌ ERROR: Unable to analyze URL',
+                algorithm: 'Backend',
+                confidence: 0.0,
+                details: [e.message],
+                category: 'error'
+            }, url);
+        } finally {
             analyzeBtn.disabled = false;
             loading.style.display = 'none';
-        }, 3500);
+        }
     }
     
     document.getElementById('urlInput').addEventListener('keypress', function(e) {
