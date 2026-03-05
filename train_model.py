@@ -4,6 +4,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 from xgboost import XGBClassifier
+from sklearn.ensemble import StackingClassifier
+from sklearn.linear_model import LogisticRegression
 import pickle
 
 # Define the path to the data file
@@ -33,7 +35,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 
 # RANDOM FOREST 
-rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
+rf_model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
 rf_model.fit(X_train, y_train)
 
 rf_pred = rf_model.predict(X_test)
@@ -49,9 +51,9 @@ xgb_model = XGBClassifier(
     learning_rate=0.1,
     max_depth=6,
     eval_metric='logloss',
-    random_state=42
+    random_state=42,
+    n_jobs=-1
 )
-
 xgb_model.fit(X_train, y_train)
 
 xgb_pred = xgb_model.predict(X_test)
@@ -60,3 +62,23 @@ print(f'XGBoost Accuracy: {xgb_accuracy * 100:.2f}%')
 
 with open(os.path.join(current_dir, 'xgboost_model.pkl'), 'wb') as file:
     pickle.dump(xgb_model, file)
+
+# STACKING ENSEMBLE (RF + XGB -> Logistic Regression)
+stack_model = StackingClassifier(
+    estimators=[
+        ('rf', rf_model),
+        ('xgb', xgb_model)
+    ],
+    final_estimator=LogisticRegression(max_iter=1000, class_weight='balanced', random_state=42),
+    stack_method='predict_proba',
+    n_jobs=-1
+)
+stack_model.fit(X_train, y_train)
+
+stack_pred = stack_model.predict(X_test)
+stack_accuracy = accuracy_score(y_test, stack_pred)
+print(f'Stacking Accuracy: {stack_accuracy * 100:.2f}%')
+
+# Simpan meta-learner (Logistic Regression) ke rule_lr.pkl
+with open(os.path.join(current_dir, 'rule_lr.pkl'), 'wb') as file:
+    pickle.dump(stack_model.final_estimator_, file)

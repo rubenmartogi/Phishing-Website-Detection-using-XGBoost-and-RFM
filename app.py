@@ -16,7 +16,11 @@ RF_MODEL_PATH = "random_forest_model.pkl"
 XGB_MODEL_PATH = "xgboost_model.pkl"
 META_MODEL_PATH = "rule_lr.pkl"
 
-SUSPICIOUS_TLD = {"zip", "xyz", "top", "tk", "ga", "ml", "gq", "cf", "pw", "cc", "club"}
+SUSPICIOUS_TLD = [
+    "zip", "xyz", "top", "tk", "ga", "ml", "gq", "cf", "pw", "cc", "club", "ws", "biz", "online", "site", "live", "work", "icu", "info",
+    "cn", "ru", "loan", "download", "click"
+]
+STANDARD_PORTS = {21, 22, 23, 80, 443, 445, 1433, 1521, 3306, 3389}
 SHORTENERS = {
     "bit.ly", "goo.gl", "tinyurl.com", "ow.ly", "t.co", "is.gd", "buff.ly",
     "adf.ly", "bit.do", "cutt.ly"
@@ -27,7 +31,7 @@ PHISH_HINTS = [
     "paypal", "apple", "microsoft", "confirm", "signin", "password"
 ]
 
-app = Flask(__name__, static_folder="Phishing_detection_app")
+app = Flask(__name__, static_folder="static")
 
 # =========================
 # Utils
@@ -95,6 +99,8 @@ def extract_features(url: str) -> dict:
     digits_url = sum(c.isdigit() for c in full)
     digits_host = sum(c.isdigit() for c in hostname)
 
+    nb_at = 1 if parsed.username else 0
+
     # word stats
     words_raw, shortest_raw, longest_raw, avg_raw = _word_stats(full)
     words_host, shortest_host, longest_host, avg_host = _word_stats(hostname)
@@ -114,7 +120,7 @@ def extract_features(url: str) -> dict:
         "ip": is_ip(hostname),
         "nb_dots": full.count("."),
         "nb_hyphens": full.count("-"),
-        "nb_at": full.count("@"),
+        "nb_at": nb_at,
         "nb_qm": full.count("?"),
         "nb_and": full.count("&"),
         "nb_eq": full.count("="),
@@ -160,7 +166,7 @@ def extract_features(url: str) -> dict:
         "avg_word_host": avg_host,
         "avg_word_path": avg_path,
         "phish_hints": sum(1 for k in PHISH_HINTS if k in full.lower()),
-        "suspecious_tld": 1 if tld in SUSPICIOUS_TLD else 0,
+        "suspicious_tld": 1 if tld in SUSPICIOUS_TLD else 0,
 
         # === content/externals (placeholder sesuai notebook) ===
         "statistical_report": 0,
@@ -198,6 +204,8 @@ def extract_features(url: str) -> dict:
 
         # === external redirection (placeholder) ===
         "nb_external_redirection": 0,
+
+        "port": 1 if parsed.port and parsed.port not in STANDARD_PORTS else 0,
     }
     return feats
 
@@ -215,10 +223,10 @@ def rule_based_eval(url: str):
     nb_subdomains = len(subdomain.split(".")) if subdomain else 0
     random_domain = 1 if entropy(domain) > 3.5 else 0
     shortening_service = 1 if any(s in hostname for s in SHORTENERS) else 0
-    suspecious_tld = 1 if tld in SUSPICIOUS_TLD else 0
+    suspicious_tld = 1 if tld in SUSPICIOUS_TLD else 0
 
     very_important = {
-        "suspecious_tld": (suspecious_tld == 1),
+        "suspicious_tld": (suspicious_tld == 1),
         "nb_at": (feats["nb_at"] >= 1),
         "ip": (feats["ip"] == 1),
         "nb_underscore": (feats["nb_underscore"] > 3),
@@ -253,7 +261,7 @@ def rule_based_eval(url: str):
     imp_count = sum(int(v) for v in important.values())
     less_count = sum(int(v) for v in less_important.values())
 
-    rule1_flag = (vi_count >= 2)
+    rule1_flag = (vi_count >= 1)
     risk_score = (3 * vi_count) + (2 * imp_count) + (1 * less_count)
     rule_flag = int(rule1_flag or (risk_score >= 7))
 
@@ -295,7 +303,6 @@ def predict_models(url: str):
     if X is None:
         return None
 
-    # Perbaikan: gunakan DataFrame dengan nama kolom
     features_df = pd.DataFrame(X, columns=cols)
 
     rf_pred = int(rf.predict(features_df)[0])
@@ -312,6 +319,7 @@ def predict_models(url: str):
         xgb_prob = float(xgb_pred)
 
     stack_pred = None
+    stack_prob = None
     if meta is not None:
         try:
             n_in = getattr(meta, "n_features_in_", 2)
@@ -328,13 +336,18 @@ def predict_models(url: str):
         meta_X = np.array([meta_feats[:n_in]])
         try:
             stack_pred = int(meta.predict(meta_X)[0])
+            stack_prob = float(meta.predict_proba(meta_X)[0][1])
         except Exception:
             stack_pred = None
+            stack_prob = None
 
     return {
         "rf_pred": rf_pred,
+        "rf_prob": rf_prob,
         "xgb_pred": xgb_pred,
+        "xgb_prob": xgb_prob,
         "stack_pred": stack_pred,
+        "stack_prob": stack_prob,
     }
 
 # =========================
@@ -342,7 +355,13 @@ def predict_models(url: str):
 # =========================
 @app.get("/")
 def index():
-    return send_from_directory(app.static_folder, "advanced_hybrid_detector.html")
+    return send_from_directory("Phishing_detection_app", "advanced_hybrid_detector.html")
+
+def is_valid_url(url: str) -> bool:
+    url = url.strip()
+    # Regex: support userinfo (user@), domain/IP, optional port, path
+    pattern = r"^(https?://)?([a-zA-Z0-9\-._~%!$&'()*+,;=:]+@)?((([a-zA-Z0-9\-]+\.)+[a-zA-Z]{2,}|(\d{1,3}(\.\d{1,3}){3})))(:\d+)?(/.*)?$"
+    return re.match(pattern, url) is not None
 
 @app.post("/predict")
 def predict():
@@ -351,25 +370,32 @@ def predict():
     if not url:
         return jsonify({"error": "URL kosong"}), 400
 
+    if not is_valid_url(url):
+        return jsonify({"error": "URL tidak valid. Masukkan URL yang benar (misal: https://example.com)"}), 400
+
     risk_score, category, rule_flag = rule_based_eval(url)
     preds = predict_models(url)
     if preds is None:
         return jsonify({"error": "feature_columns.txt tidak ditemukan atau kosong"}), 500
 
-    # Jika rule-based PHISHING, langsung PHISHING
     if category == "Phishing":
         final_label = 1
     else:
-        # Jika bukan PHISHING, pakai hasil ML (stacking jika ada, else XGB)
         final_label = preds["stack_pred"] if preds["stack_pred"] is not None else preds["xgb_pred"]
+
+    rule_prob = min(risk_score / 10, 1.0)
 
     return jsonify({
         "risk_score": risk_score,
         "category": category,
         "rule_flag": rule_flag,
+        "rule_prob": rule_prob,  
         "rf_pred": preds["rf_pred"],
+        "rf_prob": preds["rf_prob"],  
         "xgb_pred": preds["xgb_pred"],
+        "xgb_prob": preds["xgb_prob"],  
         "stack_pred": preds["stack_pred"],
+        "stack_prob": preds["stack_prob"],  
         "final_label": final_label
     })
 
