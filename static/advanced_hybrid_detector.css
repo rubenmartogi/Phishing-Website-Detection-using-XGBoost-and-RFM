@@ -513,31 +513,6 @@ body {
     backdrop-filter: blur(10px);
 }
 
-.threat-level {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin: 20px 0;
-}
-
-.threat-meter {
-    flex: 1;
-    height: 30px;
-    background: linear-gradient(90deg, #4caf50 0%, #ff9800 50%, #f44336 100%);
-    border-radius: 15px;
-    position: relative;
-}
-
-.threat-pointer {
-    position: absolute;
-    top: -5px;
-    width: 4px;
-    height: 40px;
-    background: white;
-    border-radius: 2px;
-    transition: left 1s ease;
-}
-
 .advanced-features {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));

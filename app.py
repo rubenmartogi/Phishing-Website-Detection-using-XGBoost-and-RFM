@@ -378,25 +378,26 @@ def predict():
     if preds is None:
         return jsonify({"error": "feature_columns.txt tidak ditemukan atau kosong"}), 500
 
-    if category == "Phishing":
-        final_label = 1
-    else:
-        final_label = preds["stack_pred"] if preds["stack_pred"] is not None else preds["xgb_pred"]
-
     rule_prob = min(risk_score / 10, 1.0)
 
+    ml_prob = next(
+        (p for p in [preds.get("stack_prob"), preds.get("xgb_prob"), preds.get("rf_prob")] if p is not None),
+        0.0
+    )
+
+    if category == "Phishing":
+        final_phishing_prob = max(0.5, rule_prob, float(ml_prob))
+    else:
+        final_phishing_prob = float(ml_prob)
+
+    final_phishing_prob = float(min(max(final_phishing_prob, 0.0), 1.0))
+    final_safe_prob = float(1.0 - final_phishing_prob)
+    final_label = 1 if final_phishing_prob >= 0.5 else 0
+
     return jsonify({
-        "risk_score": risk_score,
-        "category": category,
-        "rule_flag": rule_flag,
-        "rule_prob": rule_prob,  
-        "rf_pred": preds["rf_pred"],
-        "rf_prob": preds["rf_prob"],  
-        "xgb_pred": preds["xgb_pred"],
-        "xgb_prob": preds["xgb_prob"],  
-        "stack_pred": preds["stack_pred"],
-        "stack_prob": preds["stack_prob"],  
-        "final_label": final_label
+        "final_label": final_label,
+        "final_phishing_prob": final_phishing_prob,
+        "final_safe_prob": final_safe_prob
     })
 
 if __name__ == "__main__":

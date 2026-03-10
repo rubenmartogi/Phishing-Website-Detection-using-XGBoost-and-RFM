@@ -1,97 +1,58 @@
+function clamp01(v) {
+    const n = Number(v);
+    if (Number.isNaN(n)) return 0;
+    return Math.min(1, Math.max(0, n));
+}
+
+function escapeHtml(str) {
+    return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 // UI MAPPER: backend response -> UI display
 function backendToEnhancedResult(data, url) {
-    // Penentuan kategori dan confidence
-    const isPhishing = data.final_label === 1;
-    let category = "safe";
-    let resultText = "✅ SAFE: No significant threats detected";
-    let confidence = 0.9;
+    let phishingProb = clamp01(data.final_phishing_prob);
+    let safeProb = clamp01(data.final_safe_prob);
 
-    if (data.category === "Phishing" || isPhishing) {
-        category = "phishing";
-        resultText = "🚨 PHISHING: Detected by ML/Rule-based";
-        confidence = 0.85;
-    } else if (data.category === "Suspicious") {
-        category = "suspicious";
-        resultText = "⚠️ SUSPICIOUS: Multiple risk indicators";
-        confidence = 0.65;
-    } else if (data.category === "Caution") {
-        category = "caution";
-        resultText = "🟡 CAUTION: Some risk factors detected";
-        confidence = 0.55;
+    if (!Number.isFinite(Number(data.final_safe_prob))) {
+        safeProb = clamp01(1 - phishingProb);
+    }
+    if (!Number.isFinite(Number(data.final_phishing_prob))) {
+        phishingProb = clamp01(1 - safeProb);
     }
 
-    // Voting weights: rule-based tetap jadi penyaring awal, tapi ML lebih dominan
-    // const weights = { rule: 0.2, rf: 0.4, xgb: 0.4 };
-
-    // // Voting calculation (contoh sederhana)
-    // let phishingScore = 0;
-    // phishingScore += (data.category === "Phishing" ? weights.rule : 0);
-    // phishingScore += (data.rf_pred === 1 ? weights.rf : 0);
-    // phishingScore += (data.xgb_pred === 1 ? weights.xgb : 0);
-
-    // let legitimateScore = 1 - phishingScore;
+    const isPhishing = Number(data.final_label) === 1;
+    const category = isPhishing ? "phishing" : "safe";
+    const confidence = isPhishing ? phishingProb : safeProb;
 
     return {
-        result: `${resultText} (Risk: ${data.risk_score})`,
-        algorithm: "Rule-based + Random Forest + XGBoost + Stacking (LR)",
-        confidence: confidence,
-        category: category,
+        result: isPhishing
+            ? `🚨 PHISHING: Final probability ${(phishingProb * 100).toFixed(1)}%`
+            : `✅ SAFE: Final probability ${(safeProb * 100).toFixed(1)}%`,
+        algorithm: "Final Decision Probability (Rule + RF + XGB + Stacking)",
+        confidence,
+        category,
         details: [
-            `Rule Flag: ${data.rule_flag}`,
-            `RF: ${data.rf_pred}, XGB: ${data.xgb_pred}`,
-            `Stacking: ${data.stack_pred === null ? "N/A" : data.stack_pred}`
+            `Phishing: ${(phishingProb * 100).toFixed(1)}%`,
+            `Safe: ${(safeProb * 100).toFixed(1)}%`
         ],
-        votingDetails: null,
-        // {
-        //     phishingVotes: phishingScore,
-        //     legitimateVotes: legitimateScore,
-        //     totalVotes: 1.0,
-        //     ruleResult: { result: data.category, confidence: 0.8 },
-        //     rfResult: { prediction: data.rf_pred === 1 ? "phishing" : "legitimate", confidence: 0.7 },
-        //     xgbResult: { prediction: data.xgb_pred === 1 ? "phishing" : "legitimate", confidence: 0.75 },
-        //     dynamicWeights: weights
-        // },
-        // Tambahan: mapping probabilitas
-        rule_flag: data.rule_flag,
-        rule_prob: data.rule_prob,
-        rf_pred: data.rf_pred,
-        rf_prob: data.rf_prob,
-        xgb_pred: data.xgb_pred,
-        xgb_prob: data.xgb_prob,
-        stack_pred: data.stack_pred,
-        stack_prob: data.stack_prob
+        final_phishing_prob: phishingProb,
+        final_safe_prob: safeProb
     };
 }
 
-
 // Display function
 function displayEnhancedResult(result, url) {
-    const resultDiv = document.getElementById('result');
-    const confidencePercent = (result.confidence * 100).toFixed(1);
-    console.log("result.details:", result.details);
-    console.log("result.votingDetails:", result.votingDetails);
-    
-    let resultClass = result.category || 'safe';
-    let resultIcon = '❓'; 
-    let threatLevel = 10;
-    
-    if (result.category === 'phishing') {
-        resultIcon = '🚨'; 
-        resultClass = 'phishing';
-        threatLevel = 85 + (result.confidence * 15);
-    } else if (result.category === 'suspicious') {
-        resultIcon = '⚠️'; 
-        resultClass = 'suspicious';
-        threatLevel = 40 + (result.confidence * 25);
-    } else {
-        resultIcon = '✅'; 
-        resultClass = 'safe';
-        threatLevel = Math.max(5, 20 - (result.confidence * 15));
-    }
-    // Tambahan: jika error validasi URL, tampilkan pesan sederhana
+    const resultDiv = document.getElementById("result");
+    if (!resultDiv) return;
+
     if (
-        result.category === 'error' ||
-        (result.result && result.result.includes('URL tidak valid'))
+        result.category === "error" ||
+        (result.result && String(result.result).includes("URL tidak valid"))
     ) {
         resultDiv.innerHTML = `
             <div class="result error">
@@ -104,79 +65,23 @@ function displayEnhancedResult(result, url) {
                     </div>
                 </div>
             </div>
-        
         `;
         return;
     }
 
-    let algorithmBreakdown = '';
-    let mlModelStatus = '';
-    
-    if (result.votingDetails) {
-    const vd = result.votingDetails;
-    const dw = vd.dynamicWeights;
+    const phishingProb = clamp01(result.final_phishing_prob);
+    const safeProb = clamp01(result.final_safe_prob);
+    const confidencePercent = Math.max(0, Math.min(100, Number(result.confidence || 0) * 100)).toFixed(1);
 
-    algorithmBreakdown = `
-        <div class="algorithm-breakdown">
-            <div class="algorithm-card">
-                <div class="algorithm-name">Rule-based</div>
-                <div class="algorithm-result">${result.category.charAt(0).toUpperCase() + result.category.slice(1)}</div>
-                <div class="algorithm-confidence">
-                    ${(result.rule_prob * 100).toFixed(1)}% (${(dw.rule * 100).toFixed(0)}% weight)
-                </div>
-            </div>
-            <div class="algorithm-card">
-                <div class="algorithm-name">Random Forest</div>
-                <div class="algorithm-result">${result.rf_pred === 1 ? "Phishing" : "Legitimate"}</div>
-                <div class="algorithm-confidence">
-                    ${(result.rf_prob * 100).toFixed(1)}% (${(dw.rf * 100).toFixed(0)}% weight)
-                </div>
-            </div>
-            <div class="algorithm-card">
-                <div class="algorithm-name">XGBoost</div>
-                <div class="algorithm-result">${result.xgb_pred === 1 ? "Phishing" : "Legitimate"}</div>
-                <div class="algorithm-confidence">
-                    ${(result.xgb_prob * 100).toFixed(1)}% (${(dw.xgb * 100).toFixed(0)}% weight)
-                </div>
-            </div>
-            <div class="algorithm-card">
-                <div class="algorithm-name">Logistic Regression Stacking</div>
-                <div class="algorithm-result">${result.stack_pred === 1 ? "Phishing" : (result.stack_pred === 0 ? "Legitimate" : "N/A")}</div>
-                <div class="algorithm-confidence">
-                    ${result.stack_prob !== null && result.stack_prob !== undefined ? (result.stack_prob * 100).toFixed(1) + "%" : "N/A"} (Dynamic Ensemble)
-                </div>
-            </div>
-        </div>
-    `;
-        
-        mlModelStatus = `
-            <div class="ml-model-status">
-                <div class="detail-title">🤖 ML Model Status</div>
-                <div class="detail-content">
-                    ✅ Random Forest - ACTIVE<br>
-                    ✅ XGBoost - ACTIVE<br>
-                    ✅ Stacking (LR) - ACTIVE<br>
-                    Ensemble Method: <strong>RF + XGB + LR</strong>
-                </div>
-            </div>
-        `;
-    }
-    
+    const resultClass = result.category === "phishing" ? "phishing" : "safe";
+    const resultIcon = result.category === "phishing" ? "🚨" : "✅";
+
     resultDiv.innerHTML = `
         <div class="result ${resultClass}">
             <div class="result-header">
                 <span class="result-icon">${resultIcon}</span>
-                <div class="result-text">${result.result}</div>
+                <div class="result-text">${escapeHtml(result.result)}</div>
             </div>
-            
-            <div class="threat-level">
-                <strong>🎯 Threat Level:</strong>
-                <div class="threat-meter">
-                    <div class="threat-pointer" style="left: ${threatLevel}%"></div>
-                </div>
-                <strong>${threatLevel.toFixed(0)}/100</strong>
-            </div>
-            
             <div class="confidence-section">
                 <div class="confidence-header">
                     <strong style="font-size: 1.2em;">🎯 AI Confidence</strong>
@@ -186,42 +91,36 @@ function displayEnhancedResult(result, url) {
                     <div class="confidence-fill" style="width: ${confidencePercent}%"></div>
                 </div>
             </div>
-            
-            ${mlModelStatus}
-            
+
             <div class="details-grid">
                 <div class="detail-card">
                     <div class="detail-title">🤖 AI Algorithms Used</div>
-                    <div class="detail-content">${result.algorithm}</div>
+                    <div class="detail-content">${escapeHtml(result.algorithm || "Final Decision Probability")}</div>
                 </div>
-                
+
                 <div class="detail-card">
                     <div class="detail-title">🔗 Analyzed URL</div>
-                    <div class="detail-content" style="font-family: monospace; word-break: break-all; font-size: 0.9em;">${url}</div>
+                    <div class="detail-content" style="font-family: monospace; word-break: break-all; font-size: 0.9em;">${escapeHtml(url)}</div>
                 </div>
-                
-                ${result.details ? `
+
                 <div class="detail-card">
-                    <div class="detail-title">📋 Detection Details</div>
-                    <div class="detail-content">${result.details.slice(0, 3).join(' • ')}</div>
-                </div>
-                ` : ''}
-                
-                ${result.votingDetails ? `
-                <div class="detail-card">
-                    <div class="detail-title">🗳️ Voting Results</div>
+                    <div class="detail-title">📋 Final Probability</div>
                     <div class="detail-content">
-                        Phishing: <strong>${(result.votingDetails.phishingVotes * 100).toFixed(1)}%</strong><br>
-                        Legitimate: <strong>${(result.votingDetails.legitimateVotes * 100).toFixed(1)}%</strong>
+                        Phishing: <strong>${(phishingProb * 100).toFixed(1)}%</strong> •
+                        Safe: <strong>${(safeProb * 100).toFixed(1)}%</strong>
                     </div>
                 </div>
-                ` : ''}
             </div>
-            
-            ${algorithmBreakdown}
         </div>
     `;
-    const explanation = generateExplanation(result);
+
+    const explanation = generateExplanation({
+        category: result.category,
+        confidence: result.confidence,
+        final_phishing_prob: phishingProb,
+        final_safe_prob: safeProb
+    });
+
     resultDiv.innerHTML += `
         <div class="detail-card penjelasan-otomatis">
             <div class="detail-title">📝 Penjelasan Otomatis</div>
@@ -231,62 +130,58 @@ function displayEnhancedResult(result, url) {
 }
 
 function generateExplanation(result) {
-    let explanation = "";
-
-    // Rule-based hanya sebagai filter awal
-    explanation += `Rule-based system memberikan flag: <b>${result.rule_flag}</b> (probabilitas: ${(result.rule_prob * 100).toFixed(1)}%). `;
-    explanation += `Jika hasil rule-based adalah <b>Phishing</b>, maka langsung output PHISHING. Jika bukan, hasil akhir diambil dari Machine Learning (Random Forest, XGBoost, Stacking).<br>`;
-    // Random Forest
-    explanation += `Random Forest memprediksi: <b>${result.rf_pred}</b> (probabilitas: ${(result.rf_prob * 100).toFixed(1)}%). `;
-    // XGBoost
-    explanation += `XGBoost memprediksi: <b>${result.xgb_pred}</b> (probabilitas: ${(result.xgb_prob * 100).toFixed(1)}%). `;
-    // Stacking LR
-    explanation += `Stacking Logistic Regression memprediksi: <b>${result.stack_pred}</b> (probabilitas: ${(result.stack_prob * 100).toFixed(1)}%). `;
-
-    // Tidak ada voting ensemble
-    explanation += `<br>Kesimpulan: URL ini <b>${result.category.toUpperCase()}</b> dengan confidence <b>${(result.confidence * 100).toFixed(1)}%</b>.`;
-
-    return explanation;
+    return `
+        Probabilitas akhir phishing: <b>${(clamp01(result.final_phishing_prob) * 100).toFixed(1)}%</b>.<br>
+        Probabilitas akhir safe: <b>${(clamp01(result.final_safe_prob) * 100).toFixed(1)}%</b>.<br>
+        Kesimpulan: <b>${String(result.category || "").toUpperCase()}</b> dengan confidence
+        <b>${(clamp01(result.confidence) * 100).toFixed(1)}%</b>.
+    `;
 }
 
 function fillURL(url) {
-    document.getElementById('urlInput').value = url;
-    document.getElementById('urlInput').focus();
+    const input = document.getElementById("urlInput");
+    if (!input) return;
+    input.value = url;
+    input.focus();
 }
 
 // Main analyze function (Backend Flask)
 async function analyzeURL() {
-    const urlInput = document.getElementById('urlInput');
-    const analyzeBtn = document.getElementById('analyzeBtn');
-    const loading = document.getElementById('loading');
-    const resultDiv = document.getElementById('result');
-    
+    const urlInput = document.getElementById("urlInput");
+    const analyzeBtn = document.getElementById("analyzeBtn");
+    const loading = document.getElementById("loading");
+    const resultDiv = document.getElementById("result");
+
+    if (!urlInput || !analyzeBtn || !loading || !resultDiv) return;
+
     const url = urlInput.value.trim();
-    
+
     if (!url) {
-        alert('Please enter a URL to analyze');
+        alert("Please enter a URL to analyze");
         return;
     }
-    
+
     analyzeBtn.disabled = true;
-    loading.style.display = 'block';
-    resultDiv.innerHTML = '';
-    
+    loading.style.display = "block";
+    resultDiv.innerHTML = "";
+
     try {
-        const res = await fetch('/predict', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+        const res = await fetch("/predict", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ url })
         });
 
         const data = await res.json();
+
         if (!res.ok) {
             displayEnhancedResult({
                 result: `❌ ERROR: ${data.error || "Gagal memproses URL"}`,
-                algorithm: 'Backend',
-                confidence: 0.0,
-                details: [],
-                category: 'error'
+                algorithm: "Backend",
+                confidence: 0,
+                category: "error",
+                final_phishing_prob: 0,
+                final_safe_prob: 0
             }, url);
         } else {
             const uiResult = backendToEnhancedResult(data, url);
@@ -294,24 +189,36 @@ async function analyzeURL() {
         }
     } catch (e) {
         displayEnhancedResult({
-            result: '❌ ERROR: Unable to analyze URL',
-            algorithm: 'Backend',
-            confidence: 0.0,
-            details: [e.message],
-            category: 'error'
+            result: `❌ ERROR: ${e.message || "Unable to analyze URL"}`,
+            algorithm: "Backend",
+            confidence: 0,
+            category: "error",
+            final_phishing_prob: 0,
+            final_safe_prob: 0
         }, url);
     } finally {
         analyzeBtn.disabled = false;
-        loading.style.display = 'none';
+        loading.style.display = "none";
     }
 }
 
-document.getElementById('urlInput').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-        analyzeURL();
+function initDetectorUI() {
+    const urlInput = document.getElementById("urlInput");
+    if (urlInput) {
+        urlInput.addEventListener("keypress", function (e) {
+            if (e.key === "Enter") analyzeURL();
+        });
+        urlInput.focus();
     }
-});
+}
 
-window.onload = function() {
-    document.getElementById('urlInput').focus();
-};
+// Expose for inline onclick di HTML
+window.analyzeURL = analyzeURL;
+window.fillURL = fillURL;
+
+// Aman untuk script di <head> maupun di bawah <body>
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initDetectorUI);
+} else {
+    initDetectorUI();
+}

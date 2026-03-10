@@ -186,12 +186,6 @@ Map<String, dynamic> ruleBasedFiltering(String url) {
         'algorithm': 'Rule-based',
         'confidence': confidence,
       };
-    } else {
-      return {
-        'result': '✅ SAFE: No obvious threats detected',
-        'algorithm': 'Rule-based',
-        'confidence': max(0.3, 1.0 - confidence),
-      };
     }
     
   } catch (e) {
