@@ -212,11 +212,9 @@ function initDetectorUI() {
     }
 }
 
-// Expose for inline onclick di HTML
 window.analyzeURL = analyzeURL;
 window.fillURL = fillURL;
 
-// Aman untuk script di <head> maupun di bawah <body>
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initDetectorUI);
 } else {

@@ -8,9 +8,7 @@ from urllib.parse import urlparse
 import numpy as np
 from flask import Flask, jsonify, request, send_from_directory
 
-# =========================
 # Konfigurasi
-# =========================
 FEATURE_COLUMNS_PATH = "feature_columns.txt"
 RF_MODEL_PATH = "random_forest_model.pkl"
 XGB_MODEL_PATH = "xgboost_model.pkl"
@@ -32,10 +30,7 @@ PHISH_HINTS = [
 ]
 
 app = Flask(__name__, static_folder="static")
-
-# =========================
 # Utils
-# =========================
 def entropy(s: str) -> float:
     if not s:
         return 0.0
@@ -87,9 +82,7 @@ def _word_stats(text: str):
     lengths = [len(w) for w in words]
     return len(words), min(lengths), max(lengths), float(sum(lengths)) / len(lengths)
 
-# =========================
 # Feature Extraction
-# =========================
 def extract_features(url: str) -> dict:
     full, parsed, hostname, path = parse_url(url)
     tld = tld_of(hostname)
@@ -209,9 +202,7 @@ def extract_features(url: str) -> dict:
     }
     return feats
 
-# =========================
 # Rule-based
-# =========================
 def rule_based_eval(url: str):
     feats = extract_features(url)
     full, parsed, hostname, path = parse_url(url)
@@ -276,9 +267,7 @@ def rule_based_eval(url: str):
 
     return risk_score, category, rule_flag
 
-# =========================
 # Model Loading
-# =========================
 def load_models():
     rf = pickle.load(open(RF_MODEL_PATH, "rb"))
     xgb = pickle.load(open(XGB_MODEL_PATH, "rb"))
@@ -350,9 +339,7 @@ def predict_models(url: str):
         "stack_prob": stack_prob,
     }
 
-# =========================
 # Routes
-# =========================
 @app.get("/")
 def index():
     return send_from_directory("Phishing_detection_app", "advanced_hybrid_detector.html")
