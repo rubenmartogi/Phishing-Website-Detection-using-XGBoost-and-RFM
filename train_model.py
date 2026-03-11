@@ -2,20 +2,17 @@ import os
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from xgboost import XGBClassifier
 from sklearn.ensemble import StackingClassifier
 from sklearn.linear_model import LogisticRegression
 import pickle
 
-# Define the path to the data file
 current_dir = os.path.dirname(os.path.abspath(__file__))
 data_file_path = os.path.join(current_dir, 'DataFiles', 'Dataset89_terbaru.csv')
 
-# Load the dataset
 data = pd.read_csv(data_file_path)
 
-# List fitur URL-based
 url_features = [
     "length_url", "length_hostname", "ip", "nb_dots", "nb_hyphens", "nb_at", "nb_qm", "nb_and",
     "nb_eq", "nb_underscore", "nb_tilde", "nb_percent", "nb_slash", "nb_star", "nb_colon",
@@ -25,60 +22,84 @@ url_features = [
     "random_domain", "shortening_service", "path_extension", "nb_redirection"
 ]
 
-# Extract only URL-based features
 X = data[url_features]
 y = data['label']
 
-# Split the dataset
+# ✅ random_state=12 (sama dengan notebook)
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
+    X, y, test_size=0.2, random_state=12
 )
 
-# RANDOM FOREST 
-rf_model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+# ✅ RANDOM FOREST - parameter sama dengan notebook
+rf_model = RandomForestClassifier(
+    n_estimators=200,   # ← ubah dari 100 → 200
+    max_depth=5,        # ← tambah max_depth=5
+    random_state=12,
+    n_jobs=-1
+)
 rf_model.fit(X_train, y_train)
-
 rf_pred = rf_model.predict(X_test)
-rf_accuracy = accuracy_score(y_test, rf_pred)
-print(f'Random Forest Accuracy: {rf_accuracy * 100:.2f}%')
+print(f'Random Forest Accuracy : {accuracy_score(y_test, rf_pred)*100:.2f}%')
+print(f'Random Forest Precision: {precision_score(y_test, rf_pred)*100:.2f}%')
+print(f'Random Forest Recall   : {recall_score(y_test, rf_pred)*100:.2f}%')
+print(f'Random Forest F1       : {f1_score(y_test, rf_pred)*100:.2f}%')
 
 with open(os.path.join(current_dir, 'random_forest_model.pkl'), 'wb') as file:
     pickle.dump(rf_model, file)
+print('✅ random_forest_model.pkl tersimpan')
 
-# XGBOOST 
+# ✅ XGBOOST - parameter sama dengan notebook
 xgb_model = XGBClassifier(
-    n_estimators=100,
+    n_estimators=200,       # ← ubah dari 100 → 200
     learning_rate=0.1,
-    max_depth=6,
+    max_depth=4,            # ← ubah dari 6 → 4
+    reg_lambda=1.0,         # ← tambah
+    reg_alpha=0.1,          # ← tambah
+    subsample=0.8,          # ← tambah
+    colsample_bytree=0.8,   # ← tambah
+    gamma=0.1,              # ← tambah
+    min_child_weight=2,     # ← tambah
     eval_metric='logloss',
-    random_state=42,
+    random_state=12,
     n_jobs=-1
 )
 xgb_model.fit(X_train, y_train)
-
 xgb_pred = xgb_model.predict(X_test)
-xgb_accuracy = accuracy_score(y_test, xgb_pred)
-print(f'XGBoost Accuracy: {xgb_accuracy * 100:.2f}%')
+print(f'XGBoost Accuracy : {accuracy_score(y_test, xgb_pred)*100:.2f}%')
+print(f'XGBoost Precision: {precision_score(y_test, xgb_pred)*100:.2f}%')
+print(f'XGBoost Recall   : {recall_score(y_test, xgb_pred)*100:.2f}%')
+print(f'XGBoost F1       : {f1_score(y_test, xgb_pred)*100:.2f}%')
 
 with open(os.path.join(current_dir, 'xgboost_model.pkl'), 'wb') as file:
     pickle.dump(xgb_model, file)
+print('✅ xgboost_model.pkl tersimpan')
 
-# STACKING ENSEMBLE (RF + XGB -> Logistic Regression)
+# ✅ STACKING ENSEMBLE - sama dengan notebook
 stack_model = StackingClassifier(
     estimators=[
         ('rf', rf_model),
         ('xgb', xgb_model)
     ],
-    final_estimator=LogisticRegression(max_iter=1000, class_weight='balanced', random_state=42),
+    final_estimator=LogisticRegression(
+        max_iter=1000,
+        class_weight='balanced',
+        random_state=12
+    ),
     stack_method='predict_proba',
     n_jobs=-1
 )
 stack_model.fit(X_train, y_train)
-
 stack_pred = stack_model.predict(X_test)
-stack_accuracy = accuracy_score(y_test, stack_pred)
-print(f'Stacking Accuracy: {stack_accuracy * 100:.2f}%')
+print(f'Stacking Accuracy : {accuracy_score(y_test, stack_pred)*100:.2f}%')
+print(f'Stacking Precision: {precision_score(y_test, stack_pred)*100:.2f}%')
+print(f'Stacking Recall   : {recall_score(y_test, stack_pred)*100:.2f}%')
+print(f'Stacking F1       : {f1_score(y_test, stack_pred)*100:.2f}%')
 
-# Simpan meta-learner (Logistic Regression) ke rule_lr.pkl
 with open(os.path.join(current_dir, 'rule_lr.pkl'), 'wb') as file:
     pickle.dump(stack_model.final_estimator_, file)
+print('✅ rule_lr.pkl tersimpan')
+
+# ✅ Simpan feature_columns.txt (dipakai app.py)
+with open(os.path.join(current_dir, 'feature_columns.txt'), 'w') as f:
+    f.write('\n'.join(url_features))
+print('✅ feature_columns.txt tersimpan')

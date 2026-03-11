@@ -6,6 +6,7 @@ import pandas as pd
 from urllib.parse import urlparse
 
 import numpy as np
+import tldextract
 from flask import Flask, jsonify, request, send_from_directory
 
 # Konfigurasi
@@ -29,7 +30,12 @@ PHISH_HINTS = [
     "paypal", "apple", "microsoft", "confirm", "signin", "password"
 ]
 
+# tldextract: pakai daftar suffix bawaan paket (tanpa fetch internet saat runtime)
+_TLD_EXTRACTOR = tldextract.TLDExtract(suffix_list_urls=None)
+
 app = Flask(__name__, static_folder="static")
+
+
 # Utils
 def entropy(s: str) -> float:
     if not s:
@@ -37,21 +43,24 @@ def entropy(s: str) -> float:
     probs = [s.count(c) / len(s) for c in set(s)]
     return -sum(p * math.log2(p) for p in probs)
 
+
 def get_feature_columns():
     try:
-        with open(FEATURE_COLUMNS_PATH, "r") as f:
+        with open(FEATURE_COLUMNS_PATH, "r", encoding="utf-8") as f:
             feature_columns = [line.strip() for line in f if line.strip()]
         return feature_columns
     except FileNotFoundError:
         return []
 
+
 def parse_url(url: str):
     if not url.startswith(("http://", "https://")):
         url = "http://" + url
     parsed = urlparse(url)
-    hostname = parsed.hostname or ""
+    hostname = (parsed.hostname or "").lower()
     path = parsed.path or ""
     return url, parsed, hostname, path
+
 
 def is_ip(hostname: str) -> int:
     try:
@@ -60,20 +69,30 @@ def is_ip(hostname: str) -> int:
     except Exception:
         return 0
 
+
+def _extract_parts(hostname: str):
+    ext = _TLD_EXTRACTOR(hostname or "")
+    subdomain = (ext.subdomain or "").lower()
+    domain = (ext.domain or "").lower()
+    suffix = (ext.suffix or "").lower()  # contoh: "com", "co.uk"
+    return subdomain, domain, suffix
+
+
 def tld_of(hostname: str) -> str:
-    parts = hostname.split(".")
-    return parts[-1] if len(parts) > 1 else ""
+    _, _, suffix = _extract_parts(hostname)
+    return suffix
+
 
 def subdomain_of(hostname: str) -> str:
-    parts = hostname.split(".")
-    if len(parts) <= 2:
-        return ""
-    return ".".join(parts[:-2])
+    subdomain, _, _ = _extract_parts(hostname)
+    return subdomain
+
 
 def abnormal_subdomain(subdomain: str) -> int:
     if not subdomain:
         return 0
     return 1 if ("http" in subdomain or "https" in subdomain) else 0
+
 
 def _word_stats(text: str):
     words = re.findall(r"[A-Za-z0-9]+", text.lower())
@@ -82,17 +101,16 @@ def _word_stats(text: str):
     lengths = [len(w) for w in words]
     return len(words), min(lengths), max(lengths), float(sum(lengths)) / len(lengths)
 
+
 # Feature Extraction
 def extract_features(url: str) -> dict:
     full, parsed, hostname, path = parse_url(url)
-    tld = tld_of(hostname)
-    subdomain = subdomain_of(hostname)
-    domain = hostname.split(".")[-2] if len(hostname.split(".")) >= 2 else hostname
+    subdomain, domain, tld = _extract_parts(hostname)
 
     digits_url = sum(c.isdigit() for c in full)
     digits_host = sum(c.isdigit() for c in hostname)
 
-    nb_at = 1 if parsed.username else 0
+    nb_at = full.count("@")
 
     # word stats
     words_raw, shortest_raw, longest_raw, avg_raw = _word_stats(full)
@@ -105,6 +123,16 @@ def extract_features(url: str) -> dict:
     prefix_suffix = 1 if "-" in domain else 0
     path_extension = 1 if "." in path.split("/")[-1] else 0
     nb_redirection = max(full.lower().count("http") - 1, 0)
+
+    try:
+        parsed_port = parsed.port
+    except ValueError:
+        parsed_port = None
+    port_flag = 1 if (parsed_port is not None and parsed_port not in STANDARD_PORTS) else 0
+
+    # dukung suffix multi-part: "co.uk" -> cek juga label terakhir "uk"
+    tld_last_label = tld.split(".")[-1] if tld else ""
+    suspicious_tld_flag = 1 if (tld in SUSPICIOUS_TLD or tld_last_label in SUSPICIOUS_TLD) else 0
 
     feats = {
         # === URL‑based features (notebook) ===
@@ -135,7 +163,7 @@ def extract_features(url: str) -> dict:
         "ratio_digits_url": digits_url / max(len(full), 1),
         "ratio_digits_host": digits_host / max(len(hostname), 1),
         "punycode": 1 if "xn--" in hostname else 0,
-        "port": 1 if parsed.port else 0,
+        "port": port_flag,
         "tld_in_path": 1 if tld and (tld in path) else 0,
         "tld_in_subdomain": 1 if tld and (tld in subdomain) else 0,
         "abnormal_subdomain": abnormal_subdomain(subdomain),
@@ -159,7 +187,7 @@ def extract_features(url: str) -> dict:
         "avg_word_host": avg_host,
         "avg_word_path": avg_path,
         "phish_hints": sum(1 for k in PHISH_HINTS if k in full.lower()),
-        "suspicious_tld": 1 if tld in SUSPICIOUS_TLD else 0,
+        "suspicious_tld": suspicious_tld_flag,
 
         # === content/externals (placeholder sesuai notebook) ===
         "statistical_report": 0,
@@ -197,24 +225,21 @@ def extract_features(url: str) -> dict:
 
         # === external redirection (placeholder) ===
         "nb_external_redirection": 0,
-
-        "port": 1 if parsed.port and parsed.port not in STANDARD_PORTS else 0,
     }
     return feats
+
 
 # Rule-based
 def rule_based_eval(url: str):
     feats = extract_features(url)
-    full, parsed, hostname, path = parse_url(url)
-    tld = tld_of(hostname)
-    subdomain = subdomain_of(hostname)
-    domain = hostname.split(".")[-2] if len(hostname.split(".")) >= 2 else hostname
+    _, _, hostname, _ = parse_url(url)
+    subdomain, domain, tld = _extract_parts(hostname)
 
     ratio_digits_url = feats["ratio_digits_url"]
     nb_subdomains = len(subdomain.split(".")) if subdomain else 0
     random_domain = 1 if entropy(domain) > 3.5 else 0
     shortening_service = 1 if any(s in hostname for s in SHORTENERS) else 0
-    suspicious_tld = 1 if tld in SUSPICIOUS_TLD else 0
+    suspicious_tld = 1 if (tld in SUSPICIOUS_TLD or (tld.split(".")[-1] if tld else "") in SUSPICIOUS_TLD) else 0
 
     very_important = {
         "suspicious_tld": (suspicious_tld == 1),
@@ -267,6 +292,7 @@ def rule_based_eval(url: str):
 
     return risk_score, category, rule_flag
 
+
 # Model Loading
 def load_models():
     rf = pickle.load(open(RF_MODEL_PATH, "rb"))
@@ -278,6 +304,7 @@ def load_models():
         meta = None
     return rf, xgb, meta
 
+
 def build_ml_vector(url: str):
     feats = extract_features(url)
     cols = get_feature_columns()
@@ -285,6 +312,7 @@ def build_ml_vector(url: str):
         return None, []
     vector = [feats.get(c, 0) for c in cols]
     return np.array([vector]), cols
+
 
 def predict_models(url: str):
     rf, xgb, meta = load_models()
@@ -339,16 +367,19 @@ def predict_models(url: str):
         "stack_prob": stack_prob,
     }
 
+
 # Routes
 @app.get("/")
 def index():
     return send_from_directory("Phishing_detection_app", "advanced_hybrid_detector.html")
+
 
 def is_valid_url(url: str) -> bool:
     url = url.strip()
     # Regex: support userinfo (user@), domain/IP, optional port, path
     pattern = r"^(https?://)?([a-zA-Z0-9\-._~%!$&'()*+,;=:]+@)?((([a-zA-Z0-9\-]+\.)+[a-zA-Z]{2,}|(\d{1,3}(\.\d{1,3}){3})))(:\d+)?(/.*)?$"
     return re.match(pattern, url) is not None
+
 
 @app.post("/predict")
 def predict():
@@ -365,27 +396,41 @@ def predict():
     if preds is None:
         return jsonify({"error": "feature_columns.txt tidak ditemukan atau kosong"}), 500
 
-    rule_prob = min(risk_score / 10, 1.0)
+    # score rule sesuai notebook
+    rule_prob = float(min(risk_score / 10.0, 1.0))
+
+    # prioritas ML sesuai skenario: stacking dulu, fallback xgb/rf jika stack tidak tersedia
+    stack_prob = preds.get("stack_prob")
+    stack_pred = preds.get("stack_pred")
 
     ml_prob = next(
-        (p for p in [preds.get("stack_prob"), preds.get("xgb_prob"), preds.get("rf_prob")] if p is not None),
+        (p for p in [stack_prob, preds.get("xgb_prob"), preds.get("rf_prob")] if p is not None),
         0.0
     )
+    ml_prob = float(ml_prob)
 
-    if category == "Phishing":
-        final_phishing_prob = max(0.5, rule_prob, float(ml_prob))
+    # Fusion sesuai notebook:
+    # if rule_flag == 1 -> pred phishing, score = rule_prob
+    # else             -> pakai stacking (atau fallback ML jika stack tidak ada)
+    if rule_flag == 1:
+        final_label = 1
+        final_phishing_prob = max(0.5, ml_prob)
     else:
-        final_phishing_prob = float(ml_prob)
+        final_phishing_prob = ml_prob
+        if stack_pred is not None:
+            final_label = int(stack_pred)
+        else:
+            final_label = 1 if final_phishing_prob >= 0.5 else 0
 
     final_phishing_prob = float(min(max(final_phishing_prob, 0.0), 1.0))
     final_safe_prob = float(1.0 - final_phishing_prob)
-    final_label = 1 if final_phishing_prob >= 0.5 else 0
 
     return jsonify({
         "final_label": final_label,
         "final_phishing_prob": final_phishing_prob,
         "final_safe_prob": final_safe_prob
     })
+
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
