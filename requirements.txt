@@ -1,5 +1,7 @@
-streamlit
+flask
 numpy
+pandas
 scikit-learn
+xgboost
+tldextract
 requests
-datetime

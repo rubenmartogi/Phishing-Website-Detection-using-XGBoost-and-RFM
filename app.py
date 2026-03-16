@@ -43,6 +43,9 @@ def entropy(s: str) -> float:
     probs = [s.count(c) / len(s) for c in set(s)]
     return -sum(p * math.log2(p) for p in probs)
 
+def clamp01(value: float) -> float:
+    return float(min(max(value, 0.0), 1.0))
+
 
 def get_feature_columns():
     try:
@@ -392,43 +395,51 @@ def predict():
         return jsonify({"error": "URL tidak valid. Masukkan URL yang benar (misal: https://example.com)"}), 400
 
     risk_score, category, rule_flag = rule_based_eval(url)
+    rule_prob = clamp01(risk_score / 10.0)
+
+    # TRUE PRE-FILTER: jika rule sudah jelas phishing, stop di sini (tidak jalankan ML)
+    if rule_flag == 1:
+        final_phishing_prob = rule_prob
+        final_safe_prob = clamp01(1.0 - final_phishing_prob)
+        return jsonify({
+            "final_label": 1,
+            "final_phishing_prob": final_phishing_prob,
+            "final_safe_prob": final_safe_prob,
+            "decision_source": "rule",
+            "risk_score": risk_score,
+            "risk_category": category,
+            "rule_flag": rule_flag
+        })
+
+    # Kasus ambigu -> lanjut ML
     preds = predict_models(url)
     if preds is None:
         return jsonify({"error": "feature_columns.txt tidak ditemukan atau kosong"}), 500
 
-    # score rule sesuai notebook
-    rule_prob = float(min(risk_score / 10.0, 1.0))
-
-    # prioritas ML sesuai skenario: stacking dulu, fallback xgb/rf jika stack tidak tersedia
     stack_prob = preds.get("stack_prob")
     stack_pred = preds.get("stack_pred")
+    xgb_prob = preds.get("xgb_prob")
+    rf_prob = preds.get("rf_prob")
 
-    ml_prob = next(
-        (p for p in [stack_prob, preds.get("xgb_prob"), preds.get("rf_prob")] if p is not None),
-        0.0
-    )
-    ml_prob = float(ml_prob)
+    ml_prob = next((p for p in [stack_prob, xgb_prob, rf_prob] if p is not None), 0.0)
+    final_phishing_prob = clamp01(float(ml_prob))
+    final_safe_prob = clamp01(1.0 - final_phishing_prob)
 
-    # Fusion sesuai notebook:
-    # if rule_flag == 1 -> pred phishing, score = rule_prob
-    # else             -> pakai stacking (atau fallback ML jika stack tidak ada)
-    if rule_flag == 1:
-        final_label = 1
-        final_phishing_prob = max(0.5, ml_prob)
+    if stack_pred is not None:
+        final_label = int(stack_pred)
+        decision_source = "stacking"
     else:
-        final_phishing_prob = ml_prob
-        if stack_pred is not None:
-            final_label = int(stack_pred)
-        else:
-            final_label = 1 if final_phishing_prob >= 0.5 else 0
-
-    final_phishing_prob = float(min(max(final_phishing_prob, 0.0), 1.0))
-    final_safe_prob = float(1.0 - final_phishing_prob)
+        final_label = 1 if final_phishing_prob >= 0.5 else 0
+        decision_source = "xgb" if xgb_prob is not None else "rf"
 
     return jsonify({
         "final_label": final_label,
         "final_phishing_prob": final_phishing_prob,
-        "final_safe_prob": final_safe_prob
+        "final_safe_prob": final_safe_prob,
+        "decision_source": decision_source,
+        "risk_score": risk_score,
+        "risk_category": category,
+        "rule_flag": rule_flag
     })
 
 
