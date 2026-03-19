@@ -155,7 +155,6 @@ async function analyzeURL() {
     if (!urlInput || !analyzeBtn || !loading || !resultDiv) return;
 
     const url = urlInput.value.trim();
-
     if (!url) {
         alert("Please enter a URL to analyze");
         return;
@@ -169,7 +168,7 @@ async function analyzeURL() {
         const res = await fetch("/predict", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url })
+            body: JSON.stringify({ url }) // single pipeline
         });
 
         const data = await res.json();
@@ -185,6 +184,7 @@ async function analyzeURL() {
             }, url);
         } else {
             const uiResult = backendToEnhancedResult(data, url);
+            uiResult.algorithm = `Final Decision Probability (${data.decision_source || "Rule + RF + XGB + Stacking"})`;
             displayEnhancedResult(uiResult, url);
         }
     } catch (e) {

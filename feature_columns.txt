@@ -51,7 +51,7 @@ phish_hints
 domain_in_brand
 brand_in_subdomain
 brand_in_path
-suspecious_tld
+suspicious_tld
 statistical_report
 nb_hyperlinks
 ratio_intHyperlinks

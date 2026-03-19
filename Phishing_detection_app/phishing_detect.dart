@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-// Ganti IP sesuai server Flask kamu
 const String BASE_URL = 'http://172.27.81.247:5000';
 
 Future<Map<String, dynamic>> hybridPhishingDetection(String url) async {
@@ -9,47 +8,50 @@ Future<Map<String, dynamic>> hybridPhishingDetection(String url) async {
     final response = await http.post(
       Uri.parse('$BASE_URL/predict'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'url': url}),
+      body: jsonEncode({
+        'url': url,
+      }),
     ).timeout(const Duration(seconds: 15));
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
 
-      // Map response Flask → format yang dipakai phishing.dart
-      final category = (data['category'] ?? '').toString().toLowerCase();
-      final confidence = (data['confidence'] ?? data['final_prob'] ?? 0.0) as num;
-      final label = data['label'] ?? data['result'] ?? '';
-      final algorithm = data['algorithm'] ?? 'Hybrid (Rule + RF + XGB + LR)';
+    if (response.statusCode == 200) {
+      final int finalLabel = (data['final_label'] ?? 0) as int;
+      final double phishingProb = ((data['final_phishing_prob'] ?? 0.0) as num).toDouble();
+      final double safeProb = ((data['final_safe_prob'] ?? (1.0 - phishingProb)) as num).toDouble();
+
+      final bool isPhishing = finalLabel == 1;
+      final String category = (data['category'] ?? (isPhishing ? 'phishing' : 'safe')).toString().toLowerCase();
+      final double confidence = isPhishing ? phishingProb : safeProb;
 
       String resultText;
-      if (category == 'phishing' || label == 'phishing') {
-        resultText = '🚨 PHISHING: URL ini berbahaya';
-      } else if (category == 'suspicious') {
-        resultText = '⚠️ SUSPICIOUS: URL mencurigakan';
-      } else if (category == 'caution') {
-        resultText = '🟡 CAUTION: Perlu perhatian';
+      if (isPhishing) {
+        resultText = '🚨 PHISHING: Final probability ${(phishingProb * 100).toStringAsFixed(1)}%';
       } else {
-        resultText = '✅ SAFE: URL aman';
+        resultText = '✅ SAFE: Final probability ${(safeProb * 100).toStringAsFixed(1)}%';
       }
 
       return {
         'result': resultText,
-        'category': category.isEmpty ? label : category,
-        'algorithm': algorithm,
-        'confidence': confidence.toDouble(),
-        'details': data['flags'] ?? data['details'] ?? [],
+        'category': category,
+        'algorithm': 'Final Decision Probability (Rule + RF + XGB + Stacking)',
+        'confidence': confidence,
+        'details': [
+          'Decision: ${data['decision_source'] ?? '-'}',
+          'Risk category: ${data['risk_category'] ?? '-'}',
+          'Mode: ${data['mode'] ?? '-'}',
+        ],
       };
     } else {
-      final err = jsonDecode(response.body);
       return {
-        'result': '❌ ERROR: ${err['error'] ?? response.statusCode}',
+        'result': '❌ ERROR: ${data['error'] ?? response.statusCode}',
         'algorithm': 'Flask API',
         'confidence': 0.0,
         'category': 'error',
         'details': [],
       };
     }
-  } catch (e) {
+  } catch (_) {
     return {
       'result': '❌ ERROR: Tidak dapat terhubung ke server',
       'algorithm': 'Flask API',

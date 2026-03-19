@@ -533,3 +533,24 @@ body {
     border-radius: 15px;
     margin: 20px 0;
 }
+.predict-controls{
+    margin-top:15px;
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
+    align-items:center;
+}
+.mode-select{
+    padding:10px 12px;
+    border-radius:10px;
+    border:2px solid #ced4da;
+    background:#fff;
+    font-weight:600;
+}
+.prefilter-label{
+    font-weight:600;
+    color:#495057;
+    display:flex;
+    align-items:center;
+    gap:8px;
+}

@@ -13,7 +13,7 @@ RANDOM_STATE = 12
 TEST_SIZE = 0.2
 TARGET_COL = "label"
 
-# Samakan dengan notebook
+
 ACTIVE_TRAIN_FEATURES = "hybrid81"  # "url37" atau "hybrid81"
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
