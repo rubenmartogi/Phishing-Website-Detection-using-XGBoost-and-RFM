@@ -333,11 +333,7 @@ body {
     margin-bottom: 10px;
     font-size: 1.1em;
 }
-.detail-card.penjelasan-otomatis {
-    background: #fffbe6;
-    border: 2px solid #ffd700;
-    color: #b8860b;
-}
+
 .detail-content {
     opacity: 0.9;
     line-height: 1.6;

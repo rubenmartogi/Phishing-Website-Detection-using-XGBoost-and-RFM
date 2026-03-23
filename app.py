@@ -15,22 +15,25 @@ try:
 except Exception:
     BeautifulSoup = None
 
-# =========================
 # Konfigurasi
-# =========================
 FEATURE_COLUMNS_PATH = "feature_columns.txt"
 FEATURE_MEDIANS_PATH = "feature_medians.pkl"
 RF_MODEL_PATH = "random_forest_model.pkl"
 XGB_MODEL_PATH = "xgboost_model.pkl"
 META_MODEL_PATH = "rule_lr.pkl"
 
-# Jika label phishing pada dataset Anda = 1, biarkan 1.
-# Jika ternyata kebalik (phishing=0), ubah ke 0.
 PHISHING_CLASS_VALUE = 1
 
 # default mode prediksi di API
-DEFAULT_PREDICT_MODE = "url37"   # "url37" | "hybrid81" | "auto"
-DEFAULT_USE_PREFILTER = False    # True jika rule prefilter mau dipaksa aktif
+DEFAULT_PREDICT_MODE = "url37"   # "url37" | "hybrid81"
+DEFAULT_USE_PREFILTER = True     # prefilter aktif default
+
+# prefilter thresholds
+PREFILTER_HARD_PHISHING_SCORE = 7
+PREFILTER_HARD_SAFE_SCORE = 0
+PREFILTER_BLOCK_ON_VI_HIT = True
+PREFILTER_PHISHING_MIN_CONF = 0.95
+PREFILTER_SAFE_CONF = 0.90
 
 WEB_FETCH_TIMEOUT = 6
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -80,10 +83,7 @@ _RF_MODEL = None
 _XGB_MODEL = None
 _META_MODEL = None
 
-
-# =========================
 # Utils
-# =========================
 def entropy(s: str) -> float:
     if not s:
         return 0.0
@@ -244,10 +244,7 @@ def _jsonable_classes(model):
             out.append(str(c))
     return out
 
-
-# =========================
-# Feature Extraction
-# =========================
+# Feature Extraction 
 def extract_url_features(url: str) -> dict:
     full, parsed, hostname, path = parse_url(url)
     subdomain, domain, tld = _extract_parts(hostname)
@@ -342,7 +339,6 @@ def extract_url_features(url: str) -> dict:
         "brand_in_subdomain": brand_in_subdomain,
         "brand_in_path": brand_in_path,
         "suspicious_tld": suspicious_tld_flag,
-        "suspecious_tld": suspicious_tld_flag,  # alias typo lama
         "statistical_report": statistical_report,
     }
     return feats
@@ -488,10 +484,10 @@ def extract_features(url: str, include_web_content: bool) -> dict:
     return feats
 
 
-# =========================
+ 
 # Rule-based
-# =========================
-def rule_based_eval(url: str):
+ 
+def rule_based_eval(url: str, return_detail: bool = False):
     feats = extract_url_features(url)
 
     very_important = {
@@ -526,13 +522,17 @@ def rule_based_eval(url: str):
         "shortening_service": (feats.get("shortening_service", 0) == 1),
     }
 
-    vi_count = sum(int(v) for v in very_important.values())
-    imp_count = sum(int(v) for v in important.values())
-    less_count = sum(int(v) for v in less_important.values())
+    vi_hits = [k for k, v in very_important.items() if v]
+    imp_hits = [k for k, v in important.items() if v]
+    less_hits = [k for k, v in less_important.items() if v]
+
+    vi_count = len(vi_hits)
+    imp_count = len(imp_hits)
+    less_count = len(less_hits)
 
     rule1_flag = (vi_count >= 1)
     risk_score = (3 * vi_count) + (2 * imp_count) + less_count
-    rule_flag = int(rule1_flag or (risk_score >= 7))
+    rule_flag = int(rule1_flag or (risk_score >= PREFILTER_HARD_PHISHING_SCORE))
 
     if rule_flag == 1:
         category = "Phishing"
@@ -543,12 +543,22 @@ def rule_based_eval(url: str):
     else:
         category = "Benign"
 
+    if return_detail:
+        return risk_score, category, rule_flag, {
+            "vi_count": vi_count,
+            "imp_count": imp_count,
+            "less_count": less_count,
+            "vi_hits": vi_hits,
+            "imp_hits": imp_hits,
+            "less_hits": less_hits,
+        }
+
     return risk_score, category, rule_flag
 
 
-# =========================
+ 
 # Model
-# =========================
+ 
 def load_models():
     global _RF_MODEL, _XGB_MODEL, _META_MODEL
 
@@ -588,7 +598,14 @@ def build_ml_vector(url: str, cols: list, medians: dict, include_web_content: bo
     return np.array([vector], dtype=float)
 
 
-def predict_models(url: str, cols: list, medians: dict, include_web_content: bool):
+def predict_models(
+    url: str,
+    cols: list,
+    medians: dict,
+    include_web_content: bool,
+    precomputed_rule_score: float = None,
+    precomputed_rule_flag: int = None
+):
     rf, xgb, meta = load_models()
     X = build_ml_vector(url, cols, medians, include_web_content)
     features_df = pd.DataFrame(X, columns=cols)
@@ -609,12 +626,16 @@ def predict_models(url: str, cols: list, medians: dict, include_web_content: boo
         except Exception:
             meta_n_in = 2
 
+        rule_score = precomputed_rule_score
+        rule_flag = precomputed_rule_flag
+        if rule_score is None or rule_flag is None:
+            rule_score, _, rule_flag = rule_based_eval(url)
+
         meta_feats = [rf_prob, xgb_prob]
         if meta_n_in >= 3:
-            risk_score, _, rule_flag = rule_based_eval(url)
             meta_feats = [rf_prob, xgb_prob, rule_flag]
             if meta_n_in >= 4:
-                meta_feats = [rf_prob, xgb_prob, rule_flag, risk_score]
+                meta_feats = [rf_prob, xgb_prob, rule_flag, rule_score]
 
         meta_X = np.array([meta_feats[:meta_n_in]], dtype=float)
 
@@ -641,9 +662,9 @@ def predict_models(url: str, cols: list, medians: dict, include_web_content: boo
     }
 
 
-# =========================
+ 
 # Routes
-# =========================
+ 
 @app.get("/")
 def index():
     return send_from_directory("Phishing_detection_app", "advanced_hybrid_detector.html")
@@ -654,9 +675,13 @@ def health():
     return jsonify({
         "status": "ok",
         "feature_count": len(cols),
-        "pipeline": "single_pipeline(rule+rf+xgb+lr)",
+        "pipeline": "single_pipeline(rule_prefilter -> ml_for_ambiguous)",
         "web_content_auto": _resolve_include_web_content(cols),
-        "phishing_class_value": PHISHING_CLASS_VALUE
+        "phishing_class_value": PHISHING_CLASS_VALUE,
+        "default_use_prefilter": DEFAULT_USE_PREFILTER,
+        "prefilter_hard_phishing_score": PREFILTER_HARD_PHISHING_SCORE,
+        "prefilter_hard_safe_score": PREFILTER_HARD_SAFE_SCORE,
+        "prefilter_block_on_vi_hit": PREFILTER_BLOCK_ON_VI_HIT
     })
 
 
@@ -665,6 +690,7 @@ def predict():
     data = request.get_json(silent=True) or {}
     url = (data.get("url") or "").strip()
     debug = to_bool(data.get("debug", False), False)
+    use_prefilter = to_bool(data.get("use_prefilter", DEFAULT_USE_PREFILTER), DEFAULT_USE_PREFILTER)
 
     if not url:
         return jsonify({"error": "URL kosong"}), 400
@@ -678,29 +704,95 @@ def predict():
     medians = get_feature_medians()
     include_web_content = _resolve_include_web_content(cols)
 
-    risk_score, risk_category, rule_flag = rule_based_eval(url)
+    # tahap 1: rule-based prefilter
+    risk_score, risk_category, rule_flag, rule_detail = rule_based_eval(url, return_detail=True)
     rule_prob = clamp01(risk_score / 10.0)
 
+    if use_prefilter:
+        hard_phishing = (risk_score >= PREFILTER_HARD_PHISHING_SCORE) or (
+            PREFILTER_BLOCK_ON_VI_HIT and rule_detail.get("vi_count", 0) >= 1
+        )
+        hard_safe = (risk_score <= PREFILTER_HARD_SAFE_SCORE)
+
+        if hard_phishing:
+            final_phishing_prob = clamp01(max(PREFILTER_PHISHING_MIN_CONF, rule_prob))
+            resp = {
+                "final_label": 1,
+                "final_phishing_prob": final_phishing_prob,
+                "final_safe_prob": clamp01(1.0 - final_phishing_prob),
+                "decision_source": "rule_based_prefilter_phishing",
+                "risk_score": risk_score,
+                "risk_category": "Phishing",
+                "rule_flag": 1,
+                "model_feature_count": len(cols),
+                "web_content_used": False,
+                "mode": "single_pipeline",
+                "rf_prob": None,
+                "xgb_prob": None,
+                "stack_prob": None,
+                "label": "phishing",
+                "category": "phishing",
+                "confidence": final_phishing_prob,
+            }
+            if debug:
+                resp["debug"] = {
+                    "prefilter_enabled": True,
+                    "prefilter_triggered": True,
+                    "route_to_ml": False,
+                    "rule_prob": rule_prob,
+                    "rule_detail": rule_detail,
+                }
+            return jsonify(resp)
+
+        if hard_safe:
+            final_safe_prob = clamp01(PREFILTER_SAFE_CONF)
+            resp = {
+                "final_label": 0,
+                "final_phishing_prob": clamp01(1.0 - final_safe_prob),
+                "final_safe_prob": final_safe_prob,
+                "decision_source": "rule_based_prefilter_safe",
+                "risk_score": risk_score,
+                "risk_category": "Benign",
+                "rule_flag": 0,
+                "model_feature_count": len(cols),
+                "web_content_used": False,
+                "mode": "single_pipeline",
+                "rf_prob": None,
+                "xgb_prob": None,
+                "stack_prob": None,
+                "label": "safe",
+                "category": "safe",
+                "confidence": final_safe_prob,
+            }
+            if debug:
+                resp["debug"] = {
+                    "prefilter_enabled": True,
+                    "prefilter_triggered": True,
+                    "route_to_ml": False,
+                    "rule_prob": rule_prob,
+                    "rule_detail": rule_detail,
+                }
+            return jsonify(resp)
+
+    # tahap 2: hanya kasus ambigu lanjut ML
     preds = predict_models(
         url=url,
         cols=cols,
         medians=medians,
-        include_web_content=include_web_content
+        include_web_content=include_web_content,
+        precomputed_rule_score=risk_score,
+        precomputed_rule_flag=rule_flag
     )
 
-    # Single pipeline final decision
+    # keputusan akhir untuk kasus ambigu: ML-centric (tanpa blend rule)
     if preds.get("stack_prob") is not None:
-        if (preds.get("meta_n_in") or 0) >= 3:
-            final_phishing_prob = clamp01(float(preds["stack_prob"]))
-            decision_source = "stacking_meta(rule+rf+xgb)"
-        else:
-            final_phishing_prob = clamp01(0.90 * float(preds["stack_prob"]) + 0.10 * rule_prob)
-            decision_source = "stacking_meta+rule_blend"
+        final_phishing_prob = clamp01(float(preds["stack_prob"]))
+        decision_source = "ml_stacking_ambiguous_case"
     else:
         rf_prob = float(preds.get("rf_prob") or 0.0)
         xgb_prob = float(preds.get("xgb_prob") or 0.0)
-        final_phishing_prob = clamp01(0.45 * rf_prob + 0.45 * xgb_prob + 0.10 * rule_prob)
-        decision_source = "rf+xgb+rule_blend"
+        final_phishing_prob = clamp01(0.5 * rf_prob + 0.5 * xgb_prob)
+        decision_source = "ml_rf_xgb_ambiguous_case"
 
     final_safe_prob = clamp01(1.0 - final_phishing_prob)
     final_label = 1 if final_phishing_prob >= 0.5 else 0
@@ -728,6 +820,9 @@ def predict():
 
     if debug:
         response["debug"] = {
+            "prefilter_enabled": use_prefilter,
+            "prefilter_triggered": False,
+            "route_to_ml": True,
             "phishing_class_value": PHISHING_CLASS_VALUE,
             "rf_raw": preds.get("rf_raw"),
             "xgb_raw": preds.get("xgb_raw"),
@@ -736,11 +831,7 @@ def predict():
             "meta_classes": preds.get("meta_classes"),
             "meta_n_in": preds.get("meta_n_in"),
             "rule_prob": rule_prob,
-            "potential_label_inversion": (
-                float(preds.get("rf_prob") or 0.0) > 0.90 and
-                float(preds.get("xgb_prob") or 0.0) > 0.90 and
-                risk_score <= 1
-            )
+            "rule_detail": rule_detail
         }
 
     return jsonify(response)

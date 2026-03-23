@@ -113,29 +113,6 @@ function displayEnhancedResult(result, url) {
             </div>
         </div>
     `;
-
-    const explanation = generateExplanation({
-        category: result.category,
-        confidence: result.confidence,
-        final_phishing_prob: phishingProb,
-        final_safe_prob: safeProb
-    });
-
-    resultDiv.innerHTML += `
-        <div class="detail-card penjelasan-otomatis">
-            <div class="detail-title">📝 Penjelasan Otomatis</div>
-            <div class="detail-content">${explanation}</div>
-        </div>
-    `;
-}
-
-function generateExplanation(result) {
-    return `
-        Probabilitas akhir phishing: <b>${(clamp01(result.final_phishing_prob) * 100).toFixed(1)}%</b>.<br>
-        Probabilitas akhir safe: <b>${(clamp01(result.final_safe_prob) * 100).toFixed(1)}%</b>.<br>
-        Kesimpulan: <b>${String(result.category || "").toUpperCase()}</b> dengan confidence
-        <b>${(clamp01(result.confidence) * 100).toFixed(1)}%</b>.
-    `;
 }
 
 function fillURL(url) {
