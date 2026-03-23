@@ -32,6 +32,7 @@ DEFAULT_USE_PREFILTER = True     # prefilter aktif default
 PREFILTER_HARD_PHISHING_SCORE = 7
 PREFILTER_HARD_SAFE_SCORE = 0
 PREFILTER_BLOCK_ON_VI_HIT = True
+PREFILTER_FORCE_ML_ON_ZERO_SCORE = True
 PREFILTER_PHISHING_MIN_CONF = 0.95
 PREFILTER_SAFE_CONF = 0.90
 
@@ -681,7 +682,8 @@ def health():
         "default_use_prefilter": DEFAULT_USE_PREFILTER,
         "prefilter_hard_phishing_score": PREFILTER_HARD_PHISHING_SCORE,
         "prefilter_hard_safe_score": PREFILTER_HARD_SAFE_SCORE,
-        "prefilter_block_on_vi_hit": PREFILTER_BLOCK_ON_VI_HIT
+        "prefilter_block_on_vi_hit": PREFILTER_BLOCK_ON_VI_HIT,
+        "prefilter_force_ml_on_zero_score": PREFILTER_FORCE_ML_ON_ZERO_SCORE
     })
 
 
@@ -714,6 +716,12 @@ def predict():
         )
         hard_safe = (risk_score <= PREFILTER_HARD_SAFE_SCORE)
 
+        # score 0 jangan langsung safe; paksa lanjut ML
+        force_ml_on_zero_applied = False
+        if PREFILTER_FORCE_ML_ON_ZERO_SCORE and risk_score == 0:
+            hard_safe = False
+            force_ml_on_zero_applied = True
+
         if hard_phishing:
             final_phishing_prob = clamp01(max(PREFILTER_PHISHING_MIN_CONF, rule_prob))
             resp = {
@@ -741,6 +749,8 @@ def predict():
                     "route_to_ml": False,
                     "rule_prob": rule_prob,
                     "rule_detail": rule_detail,
+                    "force_ml_on_zero_score": PREFILTER_FORCE_ML_ON_ZERO_SCORE,
+                    "force_ml_on_zero_applied": force_ml_on_zero_applied
                 }
             return jsonify(resp)
 
@@ -771,10 +781,12 @@ def predict():
                     "route_to_ml": False,
                     "rule_prob": rule_prob,
                     "rule_detail": rule_detail,
+                    "force_ml_on_zero_score": PREFILTER_FORCE_ML_ON_ZERO_SCORE,
+                    "force_ml_on_zero_applied": force_ml_on_zero_applied
                 }
             return jsonify(resp)
 
-    # tahap 2: hanya kasus ambigu lanjut ML
+    # tahap 2: kasus ambigu / score 0 (jika dipaksa) lanjut ML
     preds = predict_models(
         url=url,
         cols=cols,
@@ -784,7 +796,7 @@ def predict():
         precomputed_rule_flag=rule_flag
     )
 
-    # keputusan akhir untuk kasus ambigu: ML-centric (tanpa blend rule)
+    # keputusan akhir untuk kasus ML
     if preds.get("stack_prob") is not None:
         final_phishing_prob = clamp01(float(preds["stack_prob"]))
         decision_source = "ml_stacking_ambiguous_case"
@@ -831,11 +843,12 @@ def predict():
             "meta_classes": preds.get("meta_classes"),
             "meta_n_in": preds.get("meta_n_in"),
             "rule_prob": rule_prob,
-            "rule_detail": rule_detail
+            "rule_detail": rule_detail,
+            "force_ml_on_zero_score": PREFILTER_FORCE_ML_ON_ZERO_SCORE,
+            "force_ml_on_zero_applied": (PREFILTER_FORCE_ML_ON_ZERO_SCORE and risk_score == 0)
         }
 
     return jsonify(response)
-
 
 # alias endpoint lama (jika frontend lama masih pakai ini)
 @app.post("/predict_url")
