@@ -11,7 +11,7 @@
         <div class="header">
             <div class="header-content">
                 <h1>🛡️ Advanced Hybrid Phishing Detector</h1>
-                
+                <p class="subtitle">Rule-based + Random Forest + XGBoost + Stacking (with selectable modes)</p>
                 <div class="tech-stack">
                     <span class="tech-badge">🛡️ Rule-based Filtering</span>
                     <span class="tech-badge">🌳 Random Forest</span>
@@ -20,65 +20,66 @@
                 </div>
             </div>
         </div>
+
         <div class="main-content">
             <div class="input-section">
-                <label for="urlInput" class="input-label">
-                    🔗 Enter URL for Advanced AI Analysis:
-                </label>
+                <label for="urlInput" class="input-label">🔗 Enter URL for Advanced AI Analysis:</label>
                 <input type="text" id="urlInput" class="url-input" placeholder="https://example.com or paste any suspicious URL here...">
 
-                <button id="analyzeBtn" class="analyze-btn" onclick="analyzeURL()">
-                    🔍 Check URL
-                </button>
+                <div class="predict-controls">
+                    <label for="modeSelect" class="prefilter-label">🧪 Prediction Mode:</label>
+                    <select id="modeSelect" class="mode-select">
+                        <option value="rf_only">Random Forest</option>
+                        <option value="xgb_only">XGBoost</option>
+                        <option value="ml_stacking_only"> ML + Stacking</option>
+                        <option value="hybrid_prefilter" selected>Rule-Based + ML + Stacking</option>
+                    </select>
+                </div>
+
+                <button id="analyzeBtn" class="analyze-btn" onclick="analyzeURL()">🔍 Check URL</button>
             </div>
+
             <div id="loading" class="loading">
-                <div class="loading-animation">
-                    <div class="loading-spinner"></div>
-                    <div class="loading-text">🧠 Processing with Ultra-Enhanced AI</div>
-                </div>
-                <div class="loading-steps">
-                    Step 1: URL Normalization & Advanced Parsing<br>
-                    Step 2: Enhanced Rule-based Analysis (Dynamic Weight)<br>
-                    Step 3: Advanced Feature Extraction (37 features)<br>
-                    Step 4: Random Forest Classification (200 Trees, max_depth=5)<br>
-                    Step 5: XGBoost Gradient Boosting (200 Rounds, max_depth=4)<br>
-                    Step 6: Dynamic Ensemble Decision Making
-                </div>
+                <div class="loading-spinner"></div>
+                <p>Analyzing URL with selected mode...</p>
             </div>
+
             <div id="result"></div>
+
             <div class="test-section">
                 <h3>🧪 Test URLs - Click to Auto-Fill & Analyze</h3>
-                <div class="url-categories">
-                    <div class="url-category">
-                        <div class="category-header">
-                            <span class="category-icon">✅</span>
-                            <span class="category-title">Safe & Benign URL</span>
-                        </div>
-                        <div class="url-list-columns">
-                            <div class="url-example" onclick="fillURL('https://www.google.com')">https://www.google.com</div>
-                            <div class="url-example" onclick="fillURL('https://github.com')">https://github.com</div>
-                            <div class="url-example" onclick="fillURL('https://www.wikipedia.org')">https://www.wikipedia.org</div>
-                            <div class="url-example" onclick="fillURL('https://www.microsoft.com')">https://www.microsoft.com</div>
-                            <div class="url-example" onclick="fillURL('https://www.apple.com')">https://www.apple.com</div>
-                        </div>
+
+                <div class="url-category">
+                    <div class="category-header">
+                        <span class="category-icon">✅</span>
+                        <span class="category-title">Safe & Benign URLs</span>
                     </div>
-                    <div class="url-category">
-                        <div class="category-header">
-                            <span class="category-icon">🚨</span>
-                            <span class="category-title">Phishing URL</span>
-                        </div>
-                        <div class="url-list-columns">
-                            <div class="url-example" onclick="fillURL('www.dghjdgf.com/paypal.co.uk/cycgi-bin/webscrcmd=_home-customer&nav=1/loading.php')">www.dghjdgf.com/paypal.co.uk/cycgi-bin/webscrcmd=_home-customer&nav=1/loading.php</div>
-                            <div class="url-example" onclick="fillURL('https://smmhejtkx.olghvlbkcdqtscd.top/ksjdbj')">https://smmhejtkx.olghvlbkcdqtscd.top/ksjdbj</div>
-                            <div class="url-example" onclick="fillURL('http://paypal-verify-account-urgent.suspicious.tk')">http://paypal-verify-account-urgent.suspicious.tk</div>
-                            <div class="url-example" onclick="fillURL('https://secure-login.verify.paypal.account-update.phishingsite.com')">https://secure-login.verify.paypal.account-update.phishingsite.com</div>
-                            <div class="url-example" onclick="fillURL('http://192.168.1.1/amazon-login@phishing-secure.com')">http://192.168.1.1/amazon-login@phishing-secure.com</div>
-                        </div>
+                    <div class="url-list">
+                        <div class="url-example" onclick="fillURL('https://www.google.com')">https://www.google.com</div>
+                        <div class="url-example" onclick="fillURL('https://github.com')">https://github.com</div>
+                        <div class="url-example" onclick="fillURL('https://www.wikipedia.org')">https://www.wikipedia.org</div>
+                        <div class="url-example" onclick="fillURL('https://www.microsoft.com')">https://www.microsoft.com</div>
+                        <div class="url-example" onclick="fillURL('https://www.apple.com')">https://www.apple.com</div>
+                    </div>
+                </div>
+
+                <div class="url-category">
+                    <div class="category-header">
+                        <span class="category-icon">🚨</span>
+                        <span class="category-title">Phishing URLs</span>
+                    </div>
+                    <div class="url-list">
+                        <div class="url-example" onclick="fillURL('www.dghjdgf.com/paypal.co.uk/cycgi-bin/webscrcmd=_home-customer&nav=1/loading.php')">www.dghjdgf.com/paypal.co.uk/cycgi-bin/webscrcmd=_home-customer&nav=1/loading.php</div>
+                        <div class="url-example" onclick="fillURL('https://smmhejtkx.olghvlbkcdqtscd.top/ksjdbj')">https://smmhejtkx.olghvlbkcdqtscd.top/ksjdbj</div>
+                        <div class="url-example" onclick="fillURL('http://paypal-verify-account-urgent.suspicious.tk')">http://paypal-verify-account-urgent.suspicious.tk</div>
+                        <div class="url-example" onclick="fillURL('https://secure-login.verify.paypal.account-update.phishingsite.com')">https://secure-login.verify.paypal.account-update.phishingsite.com</div>
+                        <div class="url-example" onclick="fillURL('http://192.168.1.1/amazon-login@phishing-secure.com')">http://192.168.1.1/amazon-login@phishing-secure.com</div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
     <script src="/static/advanced_hybrid_detector.js"></script>
 </body>
 </html>

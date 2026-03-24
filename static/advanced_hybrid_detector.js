@@ -13,7 +13,6 @@ function escapeHtml(str) {
         .replace(/'/g, "&#039;");
 }
 
-// UI MAPPER: backend response -> UI display
 function backendToEnhancedResult(data, url) {
     let phishingProb = clamp01(data.final_phishing_prob);
     let safeProb = clamp01(data.final_safe_prob);
@@ -29,87 +28,91 @@ function backendToEnhancedResult(data, url) {
     const category = isPhishing ? "phishing" : "safe";
     const confidence = isPhishing ? phishingProb : safeProb;
 
+    let displayModelName = data.model_name || "Model Prediction";
+    const mode = data.decision_mode || "hybrid_prefilter";
+    const source = data.decision_source || "-";
+
+    if (mode === "rf_only") {
+        displayModelName = "🌳 Random Forest Only";
+    } else if (mode === "xgb_only") {
+        displayModelName = "⚡ XGBoost Only";
+    } else if (mode === "ml_stacking_only") {
+        displayModelName = "🔗 RF + XGB + Stacking";
+    } else if (mode === "hybrid_prefilter") {
+        if (source.includes("rule")) {
+            displayModelName = "🛡️ Rule-Based Prefilter";
+        } else if (source.includes("stacking")) {
+            displayModelName = "🔗 RF + XGB + Stacking";
+        } else {
+            displayModelName = "🛡️ Rule-Based + ML + Stacking";
+        }
+    }
+
     return {
         result: isPhishing
             ? `🚨 PHISHING: Final probability ${(phishingProb * 100).toFixed(1)}%`
             : `✅ SAFE: Final probability ${(safeProb * 100).toFixed(1)}%`,
-        algorithm: "Final Decision Probability (Rule + RF + XGB + Stacking)",
+        algorithm: displayModelName,
+        decisionMode: mode,
+        decisionSource: source,
         confidence,
         category,
-        details: [
-            `Phishing: ${(phishingProb * 100).toFixed(1)}%`,
-            `Safe: ${(safeProb * 100).toFixed(1)}%`
-        ],
         final_phishing_prob: phishingProb,
-        final_safe_prob: safeProb
+        final_safe_prob: safeProb,
+        risk_score: data.risk_score,
+        risk_category: data.risk_category,
+        url
     };
 }
 
-// Display function
 function displayEnhancedResult(result, url) {
     const resultDiv = document.getElementById("result");
     if (!resultDiv) return;
 
-    if (
-        result.category === "error" ||
-        (result.result && String(result.result).includes("URL tidak valid"))
-    ) {
+    if (result.category === "error") {
         resultDiv.innerHTML = `
             <div class="result error">
-                <div class="result-header">
-                    <span class="result-icon">❌</span>
-                    <div class="result-text">
-                        URL tidak valid.<br>
-                        Masukkan URL yang benar.<br>
-                        Contoh: <b>https://example.com</b>
-                    </div>
-                </div>
+                <div class="result-title">❌ ERROR</div>
+                <div class="result-meta">${escapeHtml(result.result || "Unknown error")}</div>
             </div>
         `;
         return;
     }
 
-    const phishingProb = clamp01(result.final_phishing_prob);
-    const safeProb = clamp01(result.final_safe_prob);
-    const confidencePercent = Math.max(0, Math.min(100, Number(result.confidence || 0) * 100)).toFixed(1);
-
     const resultClass = result.category === "phishing" ? "phishing" : "safe";
-    const resultIcon = result.category === "phishing" ? "🚨" : "✅";
+    const confidencePercent = (clamp01(result.confidence) * 100).toFixed(1);
+    const pPhish = (clamp01(result.final_phishing_prob) * 100).toFixed(1);
+    const pSafe = (clamp01(result.final_safe_prob) * 100).toFixed(1);
 
     resultDiv.innerHTML = `
         <div class="result ${resultClass}">
-            <div class="result-header">
-                <span class="result-icon">${resultIcon}</span>
-                <div class="result-text">${escapeHtml(result.result)}</div>
+            <div class="result-title">${escapeHtml(result.result)}</div>
+
+            <div class="mini-grid">
+                <div class="mini-card"><span>Model</span><b>${escapeHtml(result.algorithm)}</b></div>
+                <div class="mini-card"><span>Decision Mode</span><b>${escapeHtml(result.decisionMode)}</b></div>
+                <div class="mini-card"><span>Decision Source</span><b>${escapeHtml(result.decisionSource)}</b></div>
+                <div class="mini-card"><span>Risk</span><b>${escapeHtml(String(result.risk_category ?? "-"))} (score: ${escapeHtml(String(result.risk_score ?? "-"))})</b></div>
+
+                <!-- TANPA GARIS -->
+                <div class="mini-card"><span>Phishing Probability</span><b>${pPhish}%</b></div>
+                <div class="mini-card"><span>Safe Probability</span><b>${pSafe}%</b></div>
             </div>
-            <div class="confidence-section">
-                <div class="confidence-header">
-                    <strong style="font-size: 1.2em;">🎯 AI Confidence</strong>
-                    <span style="font-size: 1.3em; font-weight: 700;">${confidencePercent}%</span>
+
+
+            <div class="meter-box">
+                <div class="meter-label">
+                    <span>Confidence</span><b>${confidencePercent}%</b>
                 </div>
-                <div class="confidence-bar">
-                    <div class="confidence-fill" style="width: ${confidencePercent}%"></div>
+                <div class="meter-scale"><span>0</span><span>100</span></div>
+                <div class="meter-track">
+                    <div class="meter-fill confidence" style="width:${confidencePercent}%"></div>
                 </div>
             </div>
 
-            <div class="details-grid">
-                <div class="detail-card">
-                    <div class="detail-title">🤖 AI Algorithms Used</div>
-                    <div class="detail-content">${escapeHtml(result.algorithm || "Final Decision Probability")}</div>
-                </div>
-
-                <div class="detail-card">
-                    <div class="detail-title">🔗 Analyzed URL</div>
-                    <div class="detail-content" style="font-family: monospace; word-break: break-all; font-size: 0.9em;">${escapeHtml(url)}</div>
-                </div>
-
-                <div class="detail-card">
-                    <div class="detail-title">📋 Final Probability</div>
-                    <div class="detail-content">
-                        Phishing: <strong>${(phishingProb * 100).toFixed(1)}%</strong> •
-                        Safe: <strong>${(safeProb * 100).toFixed(1)}%</strong>
-                    </div>
-                </div>
+            <div class="url-box">
+                <span>URL</span>
+                <code>${escapeHtml(url || result.url || "")}</code>
             </div>
         </div>
     `;
@@ -122,16 +125,18 @@ function fillURL(url) {
     input.focus();
 }
 
-// Main analyze function (Backend Flask)
 async function analyzeURL() {
     const urlInput = document.getElementById("urlInput");
     const analyzeBtn = document.getElementById("analyzeBtn");
     const loading = document.getElementById("loading");
     const resultDiv = document.getElementById("result");
+    const modeSelect = document.getElementById("modeSelect");
 
     if (!urlInput || !analyzeBtn || !loading || !resultDiv) return;
 
     const url = urlInput.value.trim();
+    const decision_mode = modeSelect ? modeSelect.value : "hybrid_prefilter";
+
     if (!url) {
         alert("Please enter a URL to analyze");
         return;
@@ -145,33 +150,24 @@ async function analyzeURL() {
         const res = await fetch("/predict", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url }) // single pipeline
+            body: JSON.stringify({ url, decision_mode, debug: true })
         });
 
         const data = await res.json();
 
         if (!res.ok) {
             displayEnhancedResult({
-                result: `❌ ERROR: ${data.error || "Gagal memproses URL"}`,
-                algorithm: "Backend",
-                confidence: 0,
-                category: "error",
-                final_phishing_prob: 0,
-                final_safe_prob: 0
+                result: data.error || "Gagal memproses URL",
+                category: "error"
             }, url);
         } else {
-            const uiResult = backendToEnhancedResult(data, url);
-            uiResult.algorithm = `Final Decision Probability (${data.decision_source || "Rule + RF + XGB + Stacking"})`;
-            displayEnhancedResult(uiResult, url);
+            const mapped = backendToEnhancedResult(data, url);
+            displayEnhancedResult(mapped, url);
         }
     } catch (e) {
         displayEnhancedResult({
-            result: `❌ ERROR: ${e.message || "Unable to analyze URL"}`,
-            algorithm: "Backend",
-            confidence: 0,
-            category: "error",
-            final_phishing_prob: 0,
-            final_safe_prob: 0
+            result: e.message || "Unable to analyze URL",
+            category: "error"
         }, url);
     } finally {
         analyzeBtn.disabled = false;
