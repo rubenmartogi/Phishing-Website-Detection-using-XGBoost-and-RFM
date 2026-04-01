@@ -5,3 +5,4 @@ scikit-learn
 xgboost
 tldextract
 requests
+deap

@@ -14,53 +14,42 @@ function escapeHtml(str) {
 }
 
 function backendToEnhancedResult(data, url) {
-    let phishingProb = clamp01(data.final_phishing_prob);
-    let safeProb = clamp01(data.final_safe_prob);
-
-    if (!Number.isFinite(Number(data.final_safe_prob))) {
-        safeProb = clamp01(1 - phishingProb);
-    }
-    if (!Number.isFinite(Number(data.final_phishing_prob))) {
-        phishingProb = clamp01(1 - safeProb);
-    }
-
+    const pPhish = clamp01(data.final_phishing_prob);
     const isPhishing = Number(data.final_label) === 1;
-    const category = isPhishing ? "phishing" : "safe";
-    const confidence = isPhishing ? phishingProb : safeProb;
 
-    let displayModelName = data.model_name || "Model Prediction";
+    const category = isPhishing ? "phishing" : "safe";
     const mode = data.decision_mode || "hybrid_prefilter";
     const source = data.decision_source || "-";
+    let displayModelName = data.model_name || "Model Prediction";
 
     if (mode === "rf_only") {
-        displayModelName = "🌳 Random Forest Only";
+        displayModelName = "Random Forest Only";
     } else if (mode === "xgb_only") {
-        displayModelName = "⚡ XGBoost Only";
+        displayModelName = "XGBoost Only";
     } else if (mode === "ml_stacking_only") {
-        displayModelName = "🔗 RF + XGB + Stacking";
+        displayModelName = "RF + XGB + Stacking";
     } else if (mode === "hybrid_prefilter") {
         if (source.includes("rule")) {
-            displayModelName = "🛡️ Rule-Based Prefilter";
+            displayModelName = "Rule-Based Prefilter";
         } else if (source.includes("stacking")) {
-            displayModelName = "🔗 RF + XGB + Stacking";
+            displayModelName = "RF + XGB + Stacking";
         } else {
-            displayModelName = "🛡️ Rule-Based + ML + Stacking";
+            displayModelName = "Rule-Based + ML + Stacking";
         }
     }
 
+    const threshold = clamp01(
+        Number.isFinite(Number(data.final_threshold)) ? Number(data.final_threshold) : 0.6
+    );
+
     return {
-        result: isPhishing
-            ? `🚨 PHISHING: Final probability ${(phishingProb * 100).toFixed(1)}%`
-            : `✅ SAFE: Final probability ${(safeProb * 100).toFixed(1)}%`,
+        result: isPhishing ? "PHISHING" : "BENIGN",
         algorithm: displayModelName,
         decisionMode: mode,
         decisionSource: source,
-        confidence,
         category,
-        final_phishing_prob: phishingProb,
-        final_safe_prob: safeProb,
-        risk_score: data.risk_score,
-        risk_category: data.risk_category,
+        decisionScore: pPhish,
+        final_threshold: threshold,
         url
     };
 }
@@ -72,7 +61,7 @@ function displayEnhancedResult(result, url) {
     if (result.category === "error") {
         resultDiv.innerHTML = `
             <div class="result error">
-                <div class="result-title">❌ ERROR</div>
+                <div class="result-title">ERROR</div>
                 <div class="result-meta">${escapeHtml(result.result || "Unknown error")}</div>
             </div>
         `;
@@ -80,9 +69,15 @@ function displayEnhancedResult(result, url) {
     }
 
     const resultClass = result.category === "phishing" ? "phishing" : "safe";
-    const confidencePercent = (clamp01(result.confidence) * 100).toFixed(1);
-    const pPhish = (clamp01(result.final_phishing_prob) * 100).toFixed(1);
-    const pSafe = (clamp01(result.final_safe_prob) * 100).toFixed(1);
+    const threshold = clamp01(result.final_threshold);
+    const score = clamp01(result.decisionScore);
+
+    const benignRangeText = score < threshold ? score.toFixed(4) : "-";
+    const phishingRangeText = score >= threshold ? score.toFixed(4) : "-";
+    const zoneText =
+        score >= threshold
+            ? `PHISHING ZONE (${threshold.toFixed(1)}-1.0)`
+            : `BENIGN ZONE (0.0-${threshold.toFixed(1)})`;
 
     resultDiv.innerHTML = `
         <div class="result ${resultClass}">
@@ -92,22 +87,10 @@ function displayEnhancedResult(result, url) {
                 <div class="mini-card"><span>Model</span><b>${escapeHtml(result.algorithm)}</b></div>
                 <div class="mini-card"><span>Decision Mode</span><b>${escapeHtml(result.decisionMode)}</b></div>
                 <div class="mini-card"><span>Decision Source</span><b>${escapeHtml(result.decisionSource)}</b></div>
-                <div class="mini-card"><span>Risk</span><b>${escapeHtml(String(result.risk_category ?? "-"))} (score: ${escapeHtml(String(result.risk_score ?? "-"))})</b></div>
-
-                <!-- TANPA GARIS -->
-                <div class="mini-card"><span>Phishing Probability</span><b>${pPhish}%</b></div>
-                <div class="mini-card"><span>Safe Probability</span><b>${pSafe}%</b></div>
-            </div>
-
-
-            <div class="meter-box">
-                <div class="meter-label">
-                    <span>Confidence</span><b>${confidencePercent}%</b>
-                </div>
-                <div class="meter-scale"><span>0</span><span>100</span></div>
-                <div class="meter-track">
-                    <div class="meter-fill confidence" style="width:${confidencePercent}%"></div>
-                </div>
+                <div class="mini-card"><span>Rule</span><b>score &lt; ${threshold.toFixed(1)} = BENIGN, score ≥ ${threshold.toFixed(1)} = PHISHING</b></div>
+                <div class="mini-card"><span>Benign Range (0.0-${threshold.toFixed(1)})</span><b>${benignRangeText}</b></div>
+                <div class="mini-card"><span>Phishing Range (${threshold.toFixed(1)}-1.0)</span><b>${phishingRangeText}</b></div>
+                <div class="mini-card"><span>Zone</span><b>${zoneText}</b></div>
             </div>
 
             <div class="url-box">
@@ -156,19 +139,25 @@ async function analyzeURL() {
         const data = await res.json();
 
         if (!res.ok) {
-            displayEnhancedResult({
-                result: data.error || "Gagal memproses URL",
-                category: "error"
-            }, url);
+            displayEnhancedResult(
+                {
+                    result: data.error || "Gagal memproses URL",
+                    category: "error"
+                },
+                url
+            );
         } else {
             const mapped = backendToEnhancedResult(data, url);
             displayEnhancedResult(mapped, url);
         }
     } catch (e) {
-        displayEnhancedResult({
-            result: e.message || "Unable to analyze URL",
-            category: "error"
-        }, url);
+        displayEnhancedResult(
+            {
+                result: e.message || "Unable to analyze URL",
+                category: "error"
+            },
+            url
+        );
     } finally {
         analyzeBtn.disabled = false;
         loading.style.display = "none";

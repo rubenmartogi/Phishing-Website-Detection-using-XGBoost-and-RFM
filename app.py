@@ -31,11 +31,8 @@ DEFAULT_DECISION_MODE = "hybrid_prefilter"
 
 # Prefilter thresholds
 PREFILTER_HARD_PHISHING_SCORE = 7
-PREFILTER_HARD_SAFE_SCORE = 0
 PREFILTER_BLOCK_ON_VI_HIT = True
-PREFILTER_FORCE_ML_ON_ZERO_SCORE = True
 PREFILTER_PHISHING_MIN_CONF = 0.95
-PREFILTER_SAFE_CONF = 0.90
 
 WEB_FETCH_TIMEOUT = 6
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -553,18 +550,11 @@ def rule_based_eval(url: str, return_detail: bool = False):
     imp_count = len(imp_hits)
     less_count = len(less_hits)
 
-    rule1_flag = (vi_count >= 1)
     risk_score = (3 * vi_count) + (2 * imp_count) + less_count
-    rule_flag = int(rule1_flag or (risk_score >= PREFILTER_HARD_PHISHING_SCORE))
+    rule_flag = int((vi_count >= 1) or (risk_score >= PREFILTER_HARD_PHISHING_SCORE))
 
-    if rule_flag == 1:
-        category = "Phishing"
-    elif 4 <= risk_score <= 6:
-        category = "Suspicious"
-    elif 1 <= risk_score <= 3:
-        category = "Caution"
-    else:
-        category = "Benign"
+    # HANYA 2 KATEGORI
+    category = "Phishing" if rule_flag == 1 else "Suspicious"
 
     if return_detail:
         return risk_score, category, rule_flag, {
@@ -699,7 +689,7 @@ def health():
     return jsonify({
         "status": "ok",
         "feature_count": len(cols),
-        "pipeline": "single_pipeline(rule_prefilter -> ml_for_ambiguous)",
+        "pipeline": "single_pipeline(rule_prefilter_phishing_only -> ml_for_suspicious)",
         "supported_decision_modes": [
             "rf_only",
             "xgb_only",
@@ -711,9 +701,7 @@ def health():
         "phishing_class_value": PHISHING_CLASS_VALUE,
         "default_use_prefilter": DEFAULT_USE_PREFILTER,
         "prefilter_hard_phishing_score": PREFILTER_HARD_PHISHING_SCORE,
-        "prefilter_hard_safe_score": PREFILTER_HARD_SAFE_SCORE,
-        "prefilter_block_on_vi_hit": PREFILTER_BLOCK_ON_VI_HIT,
-        "prefilter_force_ml_on_zero_score": PREFILTER_FORCE_ML_ON_ZERO_SCORE
+        "prefilter_block_on_vi_hit": PREFILTER_BLOCK_ON_VI_HIT
     })
 
 
@@ -752,19 +740,20 @@ def predict():
     ):
         p_phish = clamp01(final_phishing_prob)
         p_safe = clamp01(1.0 - p_phish)
-        final_label = 1 if p_phish >= 0.5 else 0
-        category = "phishing" if final_label == 1 else "safe"
+
+        # Keputusan akhir berbasis probabilitas murni dengan cut-off 0.6
+        final_label = 1 if p_phish >= 0.6 else 0
+        category = "phishing" if final_label == 1 else "benign"
         confidence = p_phish if final_label == 1 else p_safe
 
         resp = {
             "final_label": final_label,
             "final_phishing_prob": p_phish,
             "final_safe_prob": p_safe,
+            "final_threshold": 0.6,
             "decision_mode": decision_mode,
             "decision_source": decision_source,
             "model_name": model_name,
-            "risk_score": risk_score,
-            "risk_category": risk_category,
             "rule_flag": rule_flag,
             "model_feature_count": len(cols),
             "web_content_used": include_web_content if web_used is None else bool(web_used),
@@ -783,14 +772,14 @@ def predict():
                 "decision_mode": decision_mode,
                 "phishing_class_value": PHISHING_CLASS_VALUE,
                 "rule_prob": rule_prob,
+                "risk_score": risk_score,
+                "risk_category": risk_category,
                 "rule_detail": rule_detail,
             }
 
         return jsonify(resp)
 
-    # =====================================================
-    # MODE 1: RANDOM FOREST ONLY (NEW!)
-    # =====================================================
+    # MODE 1: RANDOM FOREST ONLY
     if decision_mode == "rf_only":
         preds = predict_models(
             url=url,
@@ -810,9 +799,7 @@ def predict():
             stack_prob=None
         )
 
-    # =====================================================
     # MODE 2: XGB ONLY
-    # =====================================================
     if decision_mode == "xgb_only":
         preds = predict_models(
             url=url,
@@ -832,9 +819,7 @@ def predict():
             stack_prob=None
         )
 
-    # =====================================================
     # MODE 3: ML + STACKING ONLY (tanpa prefilter)
-    # =====================================================
     if decision_mode == "ml_stacking_only":
         preds = predict_models(
             url=url,
@@ -865,38 +850,20 @@ def predict():
             stack_prob=preds.get("stack_prob")
         )
 
-    # =====================================================
-    # MODE 4: HYBRID PREFILTER (default + ML)
-    # =====================================================
-    if use_prefilter:
-        hard_phishing = (risk_score >= PREFILTER_HARD_PHISHING_SCORE) or (
-            PREFILTER_BLOCK_ON_VI_HIT and rule_detail.get("vi_count", 0) >= 1
+    # MODE 4: HYBRID PREFILTER
+    # Aturan final:
+    # - Rule category = Phishing => hard block (langsung final phishing)
+    # - Rule category = Suspicious => lanjut ML
+    if use_prefilter and rule_flag == 1:
+        p = clamp01(max(PREFILTER_PHISHING_MIN_CONF, rule_prob))
+        return build_response(
+            final_phishing_prob=p,
+            decision_source="rule_based_prefilter_phishing",
+            model_name="Rule-Based Prefilter",
+            web_used=False
         )
-        hard_safe = (risk_score <= PREFILTER_HARD_SAFE_SCORE)
 
-        if PREFILTER_FORCE_ML_ON_ZERO_SCORE and risk_score == 0:
-            hard_safe = False
-
-        if hard_phishing:
-            p = clamp01(max(PREFILTER_PHISHING_MIN_CONF, rule_prob))
-            return build_response(
-                final_phishing_prob=p,
-                decision_source="rule_based_prefilter_phishing",
-                model_name="Rule-Based Prefilter",
-                web_used=False
-            )
-
-        if hard_safe:
-            final_safe_prob = clamp01(PREFILTER_SAFE_CONF)
-            p = clamp01(1.0 - final_safe_prob)
-            return build_response(
-                final_phishing_prob=p,
-                decision_source="rule_based_prefilter_safe",
-                model_name="Rule-Based Prefilter",
-                web_used=False
-            )
-
-    # Kalau ambiguous, lanjut ke ML
+    # Suspicious => lanjut ke ML
     preds = predict_models(
         url=url,
         cols=cols,
@@ -908,13 +875,13 @@ def predict():
 
     if preds.get("stack_prob") is not None:
         p = clamp01(float(preds["stack_prob"]))
-        source = "ml_stacking_ambiguous_case"
+        source = "ml_stacking_after_rule_suspicious"
         model_name = "RF + XGB + Logistic Regression Stacking"
     else:
         rf_p = float(preds.get("rf_prob") or 0.0)
         xgb_p = float(preds.get("xgb_prob") or 0.0)
         p = clamp01(0.5 * rf_p + 0.5 * xgb_p)
-        source = "ml_rf_xgb_ambiguous_case"
+        source = "ml_rf_xgb_after_rule_suspicious"
         model_name = "RF + XGB Average (Meta model unavailable)"
 
     return build_response(
