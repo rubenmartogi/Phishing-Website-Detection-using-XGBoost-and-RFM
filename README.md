@@ -1,160 +1,161 @@
-# Phishing Website Detection (Hybrid: Rule-Based + RF + XGBoost + LR Stacking)
+# Phishing Website Detection (Hybrid: Rule-Based + ML Stacking)
 
-Proyek ini mendeteksi URL phishing menggunakan pendekatan **hybrid**:
+Sistem deteksi website phishing hybrid yang menggabungkan rule-based filtering, Random Forest, XGBoost, dan Logistic Regression stacking untuk prediksi real-time.
 
-1. **Rule-based filtering** (deteksi cepat berbasis pola URL),
-2. **Machine learning base models**: Random Forest + XGBoost,
-3. **Meta-learner**: Logistic Regression (stacking layer).
+## Daftar Isi
+- [Gambaran Umum](#gambaran-umum)
+- [Arsitektur Sistem](#arsitektur-sistem)
+- [Instalasi](#instalasi)
+- [Menjalankan](#menjalankan)
+- [API Endpoint](#api-endpoint)
+- [Evaluasi Batch](#evaluasi-batch)
+- [Hasil Model](#hasil-model)
 
----
+## Gambaran Umum
+
+Sistem hybrid tiga tingkat:
+1. **Rule-based filtering** — deteksi cepat pola URL anomali
+2. **Base Models** — Random Forest & XGBoost
+3. **Stacking Ensemble** — Logistic Regression meta-learner
+
+URL → Ekstrak Fitur → Rule Engine → Base Models → Stacking → Prediksi (Phishing/Benign)
 
 ## Arsitektur Sistem
 
-Alur prediksi:
+| Komponen | Deskripsi |
+|----------|-----------|
+| `app.py` | Flask backend + ekstraksi fitur real-time |
+| `train_model.py` | Training pipeline dengan GA tuning |
+| `proses.ipynb` | Evaluasi batch pada dataset besar |
+| Fitur | 37 fitur: URL-based |
+| Label | Training: 1=phishing/0=benign; Test: 0=phishing/1=benign |
 
-1. URL masuk
-2. Ekstraksi fitur URL
-3. Rule-based menghitung:
-   - `vi_count`, `imp_count`, `less_count`
-   - `risk_score = 3*vi_count + 2*imp_count + 1*less_count`
-   - `rule_flag`
-4. Jika `rule_flag == 1` → gunakan skor rule sebagai confidence
-5. Jika `rule_flag == 0` → gunakan ML (RF + XGB + LR meta)
+**Artifact Model:**
+- `random_forest_model.pkl`, `xgboost_model.pkl`, `rule_lr.pkl`
+- `feature_columns.txt`, `feature_medians.pkl`
+- `ga_tuning_report.json`
 
-> Catatan implementasi saat ini: `rule_lr.pkl` berisi **LogisticRegression meta-learner**, sehingga inference ML menggunakan probabilitas RF & XGB sebagai input ke LR.
-
----
-
-## Fitur yang Digunakan
-
-Model dilatih dengan **37 fitur URL-based** (lihat `feature_columns.txt`), termasuk:
-
-- panjang URL/hostname
-- jumlah karakter khusus (`@`, `?`, `%`, `-`, `_`, dll.)
-- token protokol (`http_in_path`, `https_token`)
-- struktur domain (`nb_subdomains`, `tld_in_path`, dll.)
-- indikator anomali (`ip`, `random_domain`, `shortening_service`, dst.)
-
----
-
-## Konfigurasi Utama (Sesuai Implementasi)
-
-- **Very-important threshold**: `vi_count >= 1`
-- **Port feature**: `port = 1` jika **non-standar**
-- **Suspicious TLD list**: 24 TLD
-- **Risk formula**: `3*vi + 2*imp + 1*less`
-
----
-
-## Model Training
-
-Model yang dilatih dan disimpan:
-
-- `random_forest_model.pkl`
-- `xgboost_model.pkl`
-- `rule_lr.pkl` (meta Logistic Regression)
-- `feature_columns.txt`
-
-Hyperparameter:
-- **Random Forest**: `n_estimators=200`, `max_depth=5`, `random_state=12`
-- **XGBoost**: `n_estimators=200`, `max_depth=4`, regularisasi L1/L2, `random_state=12`
-- **Stacking Meta**: `LogisticRegression(max_iter=1000, class_weight='balanced')`
-
----
-
-## Struktur File Penting
-
-```text
-Phishing-Website-Detection-using-XGBoost-and-RFM/
-├─ app.py
-├─ train_model.py
-├─ requirements.txt
-├─ feature_columns.txt
-├─ random_forest_model.pkl
-├─ xgboost_model.pkl
-├─ rule_lr.pkl
-├─ static/
-│  ├─ advanced_hybrid_detector.css
-│  └─ advanced_hybrid_detector.js
-└─ Phishing_detection_app/
-   ├─ main.dart
-   ├─ phishing.dart
-   └─ phishing_detect.dart
-```
-
----
+**Fitur mencakup:**
+- Panjang URL/hostname, karakter khusus (`@`, `?`, `%`, `-`, `_`)
+- Token protokol (`http_in_path`, `https_token`)
+- Struktur domain (`nb_subdomains`, `tld_in_path`, dll.)
+- Indikator anomali (`ip`, `random_domain`, `shortening_service`)
 
 ## Instalasi
 
-Gunakan virtual environment (disarankan), lalu install dependency:
-
 ```bash
+# 1. Virtual environment
+python -m venv .venv
+
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+
+# Windows Command Prompt
+.\.venv\Scripts\activate
+
+# 2. Install dependencies
 pip install -r requirements.txt
 ```
 
-`requirements.txt`:
-- flask
-- numpy
-- pandas
-- scikit-learn
-- xgboost
-- tldextract
-- requests
+**Dependencies utama:**
+- flask, numpy, pandas, scikit-learn, xgboost, tldextract, requests
 
----
+## Menjalankan
 
-## Menjalankan Training
-
+### Training
 ```bash
 python train_model.py
 ```
 
-Output training akan menghasilkan file `.pkl` dan `feature_columns.txt`.
-
----
-
-## Menjalankan API Flask
-
+### Flask API
 ```bash
 python app.py
+# Akses: http://127.0.0.1:5000
 ```
 
-Default API:
-- `GET /` : health/index
-- `POST /predict` : prediksi phishing dari URL
+### Evaluasi Batch
+Buka dan jalankan `proses.ipynb` untuk mengevaluasi pada dataset test besar.
 
-Contoh request (PowerShell):
+## API Endpoint
 
-```powershell
+**GET** `/` — Halaman utama  
+**GET** `/health` — Status pipeline  
+**POST** `/predict` — Prediksi URL  
+
+### Contoh Request
+```bash
+# PowerShell
 Invoke-RestMethod -Uri "http://127.0.0.1:5000/predict" `
-  -Method POST `
-  -ContentType "application/json" `
-  -Body '{"url":"http://secure-paypal-login-verify.xyz/index.php?user=abc"}'
+  -Method POST -ContentType "application/json" `
+  -Body '{"url":"http://secure-paypal-login.xyz/index.php"}'
+
+# cURL
+curl -X POST http://127.0.0.1:5000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"url":"http://secure-paypal-login.xyz/index.php"}'
 ```
 
----
+### Response
+```json
+{
+  "label": "phishing",
+  "probability": 0.95,
+  "confidence": "high"
+}
+```
 
-## Catatan Sinkronisasi Dokumen
+## Evaluasi Batch
 
-Dokumen dan implementasi harus konsisten pada poin berikut:
+Notebook `proses.ipynb` menyediakan:
+- Evaluasi pada dataset_test.csv
+- Remapping label test → label model
+- Progress report & ETA
+- Distribusi probabilitas per bucket
+- Perbandingan timing pipeline
 
-- Rule-based **tidak dilatih** (rule engine/manual threshold)
-- Yang dilatih: RF, XGB, dan LR (meta-learner stacking)
-- Label klasifikasi: `1 = phishing`, `0 = benign`
-- Urutan fitur inference harus sama dengan `feature_columns.txt`
+## Hasil Model
 
----
+| Model | Accuracy | AUC |
+|-------|----------|-----|
+| Random Forest | 97.20% | 99.54% |
+| XGBoost | 97.73% | 99.59% |
+| Stacking (LR) | 97.42% | 99.62% |
 
-## Hasil Singkat (contoh run terbaru)
+## Catatan Penting
 
-- Random Forest: Accuracy ~80.84%
-- XGBoost: Accuracy ~87.75%
-- Stacking: Accuracy ~87.84%
+⚠️ **Label Dataset**
+- Training `data_cleaning.csv`: 1=phishing, 0=benign
+- Test `dataset_test.csv`: 0=phishing, 1=benign
+- Notebook proses.ipynb otomatis melakukan remapping
 
-Stacking memberi peningkatan kecil dibanding base model tunggal.
+⚠️ **Rule-based vs ML**
+- Rule-based: tidak dilatih, hanya threshold manual
+- ML: Random Forest, XGBoost, dan meta-learner LR dilatih dengan GA
 
----
+⚠️ **Implementasi**
+- Risk formula: `3*vi_count + 2*imp_count + 1*less_count`
+- Very-important threshold: `vi_count >= 1`
+- Suspicious TLD list: 24 TLD
+- Hyperparameter RF: n_estimators=200, max_depth=5
+- Hyperparameter XGB: n_estimators=200, max_depth=4
+
+## Struktur File
+```
+├─ app.py (Flask backend)
+├─ train_model.py (Training pipeline)
+├─ proses.ipynb (Evaluasi batch)
+├─ requirements.txt
+├─ feature_columns.txt
+├─ feature_medians.pkl
+├─ {random_forest, xgboost, rule_lr}_model.pkl
+├─ ga_tuning_report.json
+├─ DataFiles/
+│  ├─ data_cleaning.csv
+│  ├─ dataset_test.csv
+│  └─ [lainnya]
+├─ static/ (Frontend assets)
+└─ Phishing_detection_app/ (Dart UI)
+```
 
 ## Lisensi
-
-Gunakan untuk keperluan akademik dan pengembangan riset keamanan siber.
+Untuk keperluan akademik dan penelitian keamanan siber.
