@@ -214,7 +214,7 @@ def tune_xgb_ga(X_train, y_train):
         # [n_estimators, learning_rate, max_depth, subsample, colsample_bytree, min_child_weight, gamma, reg_alpha, reg_lambda]
         return xgb_ind_cls([
             random.randint(150, 500),
-            random.uniform(0.02, 0.30),
+            random.uniform(0.01, 0.30),
             random.randint(3, 10),
             random.uniform(0.60, 1.00),
             random.uniform(0.60, 1.00),
