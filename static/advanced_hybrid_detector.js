@@ -72,12 +72,12 @@ function displayEnhancedResult(result, url) {
     const threshold = clamp01(result.final_threshold);
     const score = clamp01(result.decisionScore);
 
-    const benignRangeText = score < threshold ? score.toFixed(4) : "-";
-    const phishingRangeText = score >= threshold ? score.toFixed(4) : "-";
+    const benignRangeText = score < threshold ? score.toFixed(2) : "-";
+    const phishingRangeText = score >= threshold ? score.toFixed(2) : "-";
     const zoneText =
         score >= threshold
-            ? `PHISHING ZONE (${threshold.toFixed(1)}-1.0)`
-            : `BENIGN ZONE (0.0-${threshold.toFixed(1)})`;
+            ? `PHISHING ZONE (${threshold.toFixed(2)}-1.00)`
+            : `BENIGN ZONE (0.00-${threshold.toFixed(2)})`;
 
     resultDiv.innerHTML = `
         <div class="result ${resultClass}">
@@ -87,9 +87,9 @@ function displayEnhancedResult(result, url) {
                 <div class="mini-card"><span>Model</span><b>${escapeHtml(result.algorithm)}</b></div>
                 <div class="mini-card"><span>Decision Mode</span><b>${escapeHtml(result.decisionMode)}</b></div>
                 <div class="mini-card"><span>Decision Source</span><b>${escapeHtml(result.decisionSource)}</b></div>
-                <div class="mini-card"><span>Rule</span><b>score &lt; ${threshold.toFixed(1)} = BENIGN, score ≥ ${threshold.toFixed(1)} = PHISHING</b></div>
-                <div class="mini-card"><span>Benign Range (0.0-${threshold.toFixed(1)})</span><b>${benignRangeText}</b></div>
-                <div class="mini-card"><span>Phishing Range (${threshold.toFixed(1)}-1.0)</span><b>${phishingRangeText}</b></div>
+                <div class="mini-card"><span>Rule</span><b>score &lt; ${threshold.toFixed(2)} = BENIGN, score ≥ ${threshold.toFixed(2)} = PHISHING</b></div>
+                <div class="mini-card"><span>Benign Range (0.00-${threshold.toFixed(2)})</span><b>${benignRangeText}</b></div>
+                <div class="mini-card"><span>Phishing Range (${threshold.toFixed(2)}-1.00)</span><b>${phishingRangeText}</b></div>
                 <div class="mini-card"><span>Zone</span><b>${zoneText}</b></div>
             </div>
 
