@@ -551,7 +551,7 @@ def rule_based_eval(url: str, return_detail: bool = False):
     less_count = len(less_hits)
 
     risk_score = (2 * imp_count) + less_count
-    NEW_THRESHOLD = 3
+    NEW_THRESHOLD = 4
 
     if vi_count >= 1:
         category = "Phishing"
