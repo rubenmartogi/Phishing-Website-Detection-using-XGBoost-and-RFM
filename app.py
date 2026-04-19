@@ -550,24 +550,21 @@ def rule_based_eval(url: str, return_detail: bool = False):
     imp_count = len(imp_hits)
     less_count = len(less_hits)
 
-    risk_score = (3 * vi_count) + (2 * imp_count) + less_count
+    risk_score = (2 * imp_count) + less_count
+    NEW_THRESHOLD = 3
 
-    # ========================================
-    # 3 KATEGORI: Phishing | Suspicious | Benign
-    # ========================================
-    # Phishing (score >= 7 OR VI >= 1)      → rule_flag = 1 (skip ML)
-    # Suspicious (1 <= score < 7)          → rule_flag = 0 (verify with ML)
-    # Benign (score = 0)                   → rule_flag = 0 (verify with ML)
-    
-    if (vi_count >= 1) or (risk_score >= PREFILTER_HARD_PHISHING_SCORE):
+    if vi_count >= 1:
         category = "Phishing"
-        rule_flag = 1  
+        rule_flag = 1
+    elif risk_score >= NEW_THRESHOLD:
+        category = "Phishing"
+        rule_flag = 1
     elif risk_score > 0:
         category = "Suspicious"
-        rule_flag = 0  
+        rule_flag = 0
     else:
         category = "Benign"
-        rule_flag = 0 
+        rule_flag = 0
 
     if return_detail:
         return risk_score, category, rule_flag, {
@@ -806,7 +803,7 @@ def predict():
         return build_response(
             final_phishing_prob=p,
             decision_source="rf_only",
-            model_name="Random Forest Only",
+            model_name="Random Forest",
             rf_prob=preds.get("rf_prob"),
             xgb_prob=None,
             stack_prob=None
@@ -826,7 +823,7 @@ def predict():
         return build_response(
             final_phishing_prob=p,
             decision_source="xgb_only",
-            model_name="XGBoost Only",
+            model_name="XGBoost",
             rf_prob=None,
             xgb_prob=preds.get("xgb_prob"),
             stack_prob=None
@@ -888,13 +885,13 @@ def predict():
 
     if preds.get("stack_prob") is not None:
         p = clamp01(float(preds["stack_prob"]))
-        source = "ml_stacking_after_rule_suspicious"
+        source = "ml_stacking_only"  # ubah dari "ml_stacking_after_rule_suspicious"
         model_name = "RF + XGB + Logistic Regression Stacking"
     else:
         rf_p = float(preds.get("rf_prob") or 0.0)
         xgb_p = float(preds.get("xgb_prob") or 0.0)
         p = clamp01(0.5 * rf_p + 0.5 * xgb_p)
-        source = "ml_rf_xgb_after_rule_suspicious"
+        source = "ml_rf_xgb_average_only"  # ubah dari "ml_rf_xgb_after_rule_suspicious"
         model_name = "RF + XGB Average (Meta model unavailable)"
 
     return build_response(
