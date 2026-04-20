@@ -550,21 +550,16 @@ def rule_based_eval(url: str, return_detail: bool = False):
     imp_count = len(imp_hits)
     less_count = len(less_hits)
 
-    risk_score = (2 * imp_count) + less_count
-    NEW_THRESHOLD = 4
-
-    if vi_count >= 1:
+    risk_score = (3 * vi_count) + (2 * imp_count) + less_count  
+    if (vi_count >= 1) or (risk_score >= PREFILTER_HARD_PHISHING_SCORE):
         category = "Phishing"
-        rule_flag = 1
-    elif risk_score >= NEW_THRESHOLD:
-        category = "Phishing"
-        rule_flag = 1
+        rule_flag = 1  
     elif risk_score > 0:
         category = "Suspicious"
-        rule_flag = 0
+        rule_flag = 0  
     else:
         category = "Benign"
-        rule_flag = 0
+        rule_flag = 0 
 
     if return_detail:
         return risk_score, category, rule_flag, {
