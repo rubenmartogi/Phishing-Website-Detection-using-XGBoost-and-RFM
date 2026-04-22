@@ -17,19 +17,16 @@ except Exception:
 
 # KONFIGURASI
 FEATURE_COLUMNS_PATH = "feature_columns.txt"
-FEATURE_MEDIANS_PATH = "feature_medians.pkl"
 RF_MODEL_PATH = "random_forest_model.pkl"
 XGB_MODEL_PATH = "xgboost_model.pkl"
 META_MODEL_PATH = "rule_lr.pkl"
 
 PHISHING_CLASS_VALUE = 1
 
-# Default mode prediksi
 DEFAULT_PREDICT_MODE = "url37"
 DEFAULT_USE_PREFILTER = True
 DEFAULT_DECISION_MODE = "hybrid_prefilter"
 
-# Prefilter thresholds
 PREFILTER_HARD_PHISHING_SCORE = 7
 PREFILTER_BLOCK_ON_VI_HIT = True
 PREFILTER_PHISHING_MIN_CONF = 0.95
@@ -54,15 +51,6 @@ PHISH_HINTS = [
 BRANDS = [
     "google", "facebook", "apple", "microsoft", "amazon", "paypal",
     "instagram", "whatsapp", "telegram", "netflix", "github", "linkedin"
-]
-
-URL_FEATURES_37 = [
-    "length_url", "length_hostname", "ip", "nb_dots", "nb_hyphens", "nb_at", "nb_qm", "nb_and",
-    "nb_eq", "nb_underscore", "nb_tilde", "nb_percent", "nb_slash", "nb_star", "nb_colon",
-    "nb_comma", "nb_semicolumn", "nb_dollar", "nb_space", "nb_www", "nb_com", "nb_dslash",
-    "http_in_path", "https_token", "ratio_digits_url", "ratio_digits_host", "punycode", "port",
-    "tld_in_path", "tld_in_subdomain", "abnormal_subdomain", "nb_subdomains", "prefix_suffix",
-    "random_domain", "shortening_service", "path_extension", "nb_redirection"
 ]
 
 WEB_CONTENT_KEYS = {
@@ -91,10 +79,8 @@ def entropy(s: str) -> float:
     probs = [s.count(c) / len(s) for c in set(s)]
     return -sum(p * math.log2(p) for p in probs)
 
-
 def clamp01(value: float) -> float:
     return float(min(max(value, 0.0), 1.0))
-
 
 def to_float(v, default=0.0) -> float:
     try:
@@ -105,7 +91,6 @@ def to_float(v, default=0.0) -> float:
     except Exception:
         return float(default)
 
-
 def to_bool(v, default=False) -> bool:
     if isinstance(v, bool):
         return v
@@ -114,7 +99,6 @@ def to_bool(v, default=False) -> bool:
     if isinstance(v, (int, float)):
         return bool(v)
     return default
-
 
 def normalize_decision_mode(v: str) -> str:
     x = str(v or "").strip().lower()
@@ -134,23 +118,12 @@ def normalize_decision_mode(v: str) -> str:
     }
     return aliases.get(x, DEFAULT_DECISION_MODE)
 
-
 def get_feature_columns():
     try:
         with open(FEATURE_COLUMNS_PATH, "r", encoding="utf-8") as f:
             return [line.strip() for line in f if line.strip()]
     except Exception:
         return []
-
-
-def get_feature_medians():
-    try:
-        with open(FEATURE_MEDIANS_PATH, "rb") as f:
-            obj = pickle.load(f)
-        return obj if isinstance(obj, dict) else {}
-    except Exception:
-        return {}
-
 
 def parse_url(url: str):
     u = (url or "").strip()
@@ -161,14 +134,12 @@ def parse_url(url: str):
     path = parsed.path or ""
     return u, parsed, hostname, path
 
-
 def is_ip(hostname: str) -> int:
     try:
         ipaddress.ip_address(hostname)
         return 1
     except Exception:
         return 0
-
 
 def _extract_parts(hostname: str):
     ext = _TLD_EXTRACTOR(hostname or "")
@@ -177,14 +148,12 @@ def _extract_parts(hostname: str):
     suffix = (ext.suffix or "").lower()
     return subdomain, domain, suffix
 
-
 def _word_stats(text: str):
     words = re.findall(r"[A-Za-z0-9]+", (text or "").lower())
     if not words:
         return 0, 0, 0, 0.0
     lens = [len(w) for w in words]
     return len(words), min(lens), max(lens), float(sum(lens)) / len(lens)
-
 
 def _same_or_subdomain(host: str, base_host: str) -> bool:
     host = (host or "").lower()
@@ -193,11 +162,9 @@ def _same_or_subdomain(host: str, base_host: str) -> bool:
         return False
     return host == base_host or host.endswith("." + base_host) or base_host.endswith("." + host)
 
-
 def _is_unsafe_anchor(href: str) -> bool:
     h = (href or "").strip().lower()
     return (h == "" or h == "#" or h.startswith("javascript:") or h.startswith("mailto:"))
-
 
 def _is_external_href(href: str, base_url: str, base_host: str) -> bool:
     h = (href or "").strip()
@@ -208,7 +175,6 @@ def _is_external_href(href: str, base_url: str, base_host: str) -> bool:
     if not host:
         return False
     return not _same_or_subdomain(host, base_host)
-
 
 def is_valid_url(url: str) -> bool:
     try:
@@ -222,7 +188,6 @@ def is_valid_url(url: str) -> bool:
     except Exception:
         return False
 
-
 def _class_index(model, class_value, fallback_idx=1):
     classes = list(getattr(model, "classes_", []))
     if class_value in classes:
@@ -230,7 +195,6 @@ def _class_index(model, class_value, fallback_idx=1):
     if len(classes) == 2:
         return 1 if fallback_idx >= 1 else 0
     return 0
-
 
 def _proba_for_class(model, X, class_value):
     try:
@@ -243,14 +207,11 @@ def _proba_for_class(model, X, class_value):
         pred = int(model.predict(X)[0])
         return 1.0 if pred == class_value else 0.0
 
-
 def _label_to_phishing_flag(raw_label: int) -> int:
     return 1 if int(raw_label) == PHISHING_CLASS_VALUE else 0
 
-
 def _resolve_include_web_content(cols: list) -> bool:
     return any(c in WEB_CONTENT_KEYS for c in cols)
-
 
 def _jsonable_classes(model):
     out = []
@@ -262,7 +223,6 @@ def _jsonable_classes(model):
         except Exception:
             out.append(str(c))
     return out
-
 
 # =========================================================
 # FEATURE EXTRACTION
@@ -362,7 +322,6 @@ def extract_url_features(url: str) -> dict:
         "statistical_report": statistical_report,
     }
     return feats
-
 
 def extract_web_content_features(url: str) -> dict:
     out = {}
@@ -495,14 +454,12 @@ def extract_web_content_features(url: str) -> dict:
 
     return out
 
-
 def extract_features(url: str, include_web_content: bool) -> dict:
     full_url, _, _, _ = parse_url(url)
     feats = extract_url_features(full_url)
     if include_web_content:
         feats.update(extract_web_content_features(full_url))
     return feats
-
 
 # =========================================================
 # RULE-BASED EVALUATION
@@ -573,7 +530,6 @@ def rule_based_eval(url: str, return_detail: bool = False):
 
     return risk_score, category, rule_flag
 
-
 # =========================================================
 # MODEL LOADING & PREDICTION
 # =========================================================
@@ -597,11 +553,9 @@ def load_models():
 
     return _RF_MODEL, _XGB_MODEL, _META_MODEL
 
-
-def build_ml_vector(url: str, cols: list, medians: dict, include_web_content: bool):
+def build_ml_vector(url: str, cols: list, include_web_content: bool):
     feats = extract_features(url, include_web_content=include_web_content)
 
-    # Alias untuk typo lama
     if "suspecious_tld" in cols and "suspecious_tld" not in feats:
         feats["suspecious_tld"] = feats.get("suspicious_tld", 0)
     if "suspicious_tld" in cols and "suspicious_tld" not in feats:
@@ -609,23 +563,21 @@ def build_ml_vector(url: str, cols: list, medians: dict, include_web_content: bo
 
     vector = []
     for c in cols:
-        default_v = medians.get(c, 0.0)
-        v = feats.get(c, default_v)
-        vector.append(to_float(v, default_v))
+        if c not in feats:
+            raise ValueError(f"Fitur {c} tidak tersedia dari URL yang diberikan.")
+        vector.append(to_float(feats[c], 0.0))
 
     return np.array([vector], dtype=float)
-
 
 def predict_models(
     url: str,
     cols: list,
-    medians: dict,
     include_web_content: bool,
     precomputed_rule_score: float = None,
     precomputed_rule_flag: int = None
 ):
     rf, xgb, meta = load_models()
-    X = build_ml_vector(url, cols, medians, include_web_content)
+    X = build_ml_vector(url, cols, include_web_content)
     features_df = pd.DataFrame(X, columns=cols)
 
     rf_raw = int(rf.predict(features_df)[0])
@@ -679,14 +631,12 @@ def predict_models(
         "meta_classes": _jsonable_classes(meta),
     }
 
-
 # =========================================================
 # ROUTES
 # =========================================================
 @app.get("/")
 def index():
     return send_from_directory("Phishing_detection_app", "advanced_hybrid_detector.html")
-
 
 @app.get("/health")
 def health():
@@ -709,7 +659,6 @@ def health():
         "prefilter_block_on_vi_hit": PREFILTER_BLOCK_ON_VI_HIT
     })
 
-
 @app.post("/predict")
 def predict():
     data = request.get_json(silent=True) or {}
@@ -727,7 +676,6 @@ def predict():
     if not cols:
         return jsonify({"error": "feature_columns.txt tidak ditemukan atau kosong"}), 500
 
-    medians = get_feature_medians()
     include_web_content = _resolve_include_web_content(cols)
 
     # Rule-based dihitung sekali
@@ -746,7 +694,6 @@ def predict():
         p_phish = clamp01(final_phishing_prob)
         p_safe = clamp01(1.0 - p_phish)
 
-        # Keputusan akhir berbasis probabilitas murni dengan cut-off 0.6
         final_label = 1 if p_phish >= 0.6 else 0
         category = "phishing" if final_label == 1 else "benign"
         confidence = p_phish if final_label == 1 else p_safe
@@ -789,7 +736,6 @@ def predict():
         preds = predict_models(
             url=url,
             cols=cols,
-            medians=medians,
             include_web_content=include_web_content,
             precomputed_rule_score=risk_score,
             precomputed_rule_flag=rule_flag
@@ -809,7 +755,6 @@ def predict():
         preds = predict_models(
             url=url,
             cols=cols,
-            medians=medians,
             include_web_content=include_web_content,
             precomputed_rule_score=risk_score,
             precomputed_rule_flag=rule_flag
@@ -829,7 +774,6 @@ def predict():
         preds = predict_models(
             url=url,
             cols=cols,
-            medians=medians,
             include_web_content=include_web_content,
             precomputed_rule_score=risk_score,
             precomputed_rule_flag=rule_flag
@@ -856,9 +800,6 @@ def predict():
         )
 
     # MODE 4: HYBRID PREFILTER
-    # Aturan final:
-    # - Rule category = Phishing => hard block (langsung final phishing)
-    # - Rule category = Suspicious => lanjut ML
     if use_prefilter and rule_flag == 1:
         p = clamp01(max(PREFILTER_PHISHING_MIN_CONF, rule_prob))
         return build_response(
@@ -872,7 +813,6 @@ def predict():
     preds = predict_models(
         url=url,
         cols=cols,
-        medians=medians,
         include_web_content=include_web_content,
         precomputed_rule_score=risk_score,
         precomputed_rule_flag=rule_flag
@@ -880,13 +820,13 @@ def predict():
 
     if preds.get("stack_prob") is not None:
         p = clamp01(float(preds["stack_prob"]))
-        source = "ml_stacking_only"  # ubah dari "ml_stacking_after_rule_suspicious"
+        source = "ml_stacking_only"
         model_name = "RF + XGB + Logistic Regression Stacking"
     else:
         rf_p = float(preds.get("rf_prob") or 0.0)
         xgb_p = float(preds.get("xgb_prob") or 0.0)
         p = clamp01(0.5 * rf_p + 0.5 * xgb_p)
-        source = "ml_rf_xgb_average_only"  # ubah dari "ml_rf_xgb_after_rule_suspicious"
+        source = "ml_rf_xgb_average_only"
         model_name = "RF + XGB Average (Meta model unavailable)"
 
     return build_response(
@@ -898,13 +838,11 @@ def predict():
         stack_prob=preds.get("stack_prob")
     )
 
-
 # Alias endpoint lama
 @app.post("/predict_url")
 @app.post("/analyze")
 def predict_alias():
     return predict()
-
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

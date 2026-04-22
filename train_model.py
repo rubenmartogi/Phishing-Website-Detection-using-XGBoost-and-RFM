@@ -12,7 +12,6 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from xgboost import XGBClassifier
 
-
 RANDOM_STATE = 12
 TEST_SIZE = 0.2
 TARGET_COL = "label"
@@ -26,7 +25,6 @@ GA_CXPB = 0.7
 GA_MUTPB = 0.3
 GA_CV_SPLITS = 3
 
-
 current_dir = os.path.dirname(os.path.abspath(__file__))
 data_file_path = os.path.join(current_dir, "DataFiles", "data_cleaning.csv")
 
@@ -39,22 +37,18 @@ url_features_37 = [
     "random_domain", "shortening_service", "path_extension", "nb_redirection"
 ]
 
-
 def seed_everything(seed: int):
     random.seed(seed)
     np.random.seed(seed)
 
-
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))
-
 
 def ensure_deap_creator(name, base_cls, **kwargs):
     if hasattr(creator, name):
         return getattr(creator, name)
     creator.create(name, base_cls, **kwargs)
     return getattr(creator, name)
-
 
 def print_metrics(name, y_true, y_pred, y_prob=None):
     acc = accuracy_score(y_true, y_pred)
@@ -70,11 +64,9 @@ def print_metrics(name, y_true, y_pred, y_prob=None):
     print(f"F1       : {f1 * 100:.2f}%")
     print(f"AUC      : {auc * 100:.2f}%" if not np.isnan(auc) else "AUC      : N/A")
 
-
 def prep_X(df: pd.DataFrame, cols, idx) -> pd.DataFrame:
     X = df.loc[idx].reindex(columns=cols)
     return X.apply(pd.to_numeric, errors="coerce")
-
 
 def load_and_prepare_data():
     if not os.path.exists(data_file_path):
@@ -116,12 +108,11 @@ def load_and_prepare_data():
     X_train = X_train[selected_features]
     X_test = X_test[selected_features]
 
-    train_medians = X_train.median(numeric_only=True)
-    X_train = X_train.fillna(train_medians)
-    X_test = X_test.fillna(train_medians)
+    X_train = X_train.dropna()
+    X_test = X_test.dropna()
 
-    y_train = y_all.loc[train_idx]
-    y_test = y_all.loc[test_idx]
+    y_train = y_all.loc[X_train.index]
+    y_test = y_all.loc[X_test.index]
 
     print(f"Mode: {ACTIVE_TRAIN_FEATURES}")
     print(f"URL features target: {len(url_features_37)}")
@@ -129,8 +120,7 @@ def load_and_prepare_data():
     print(f"Selected actual features: {len(selected_features)}")
     print(f"Shape train/test: {X_train.shape} / {X_test.shape}")
 
-    return X_train, X_test, y_train, y_test, selected_features, train_medians
-
+    return X_train, X_test, y_train, y_test, selected_features
 
 def tune_rf_ga(X_train, y_train):
     print("\n[GA] Tuning Random Forest...")
@@ -200,7 +190,6 @@ def tune_rf_ga(X_train, y_train):
     print("[GA] RF best CV F1:", round(best_score, 4))
     print("[GA] RF best params:", best_params)
     return best_params, best_score
-
 
 def tune_xgb_ga(X_train, y_train):
     print("\n[GA] Tuning XGBoost...")
@@ -283,11 +272,10 @@ def tune_xgb_ga(X_train, y_train):
     print("[GA] XGB best params:", best_params)
     return best_params, best_score
 
-
 def main():
     seed_everything(RANDOM_STATE)
 
-    X_train, X_test, y_train, y_test, selected_features, train_medians = load_and_prepare_data()
+    X_train, X_test, y_train, y_test, selected_features = load_and_prepare_data()
 
     # GA tune
     best_rf_params, best_rf_cv_f1 = tune_rf_ga(X_train, y_train)
@@ -331,9 +319,6 @@ def main():
     with open(os.path.join(current_dir, "feature_columns.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(selected_features))
 
-    with open(os.path.join(current_dir, "feature_medians.pkl"), "wb") as f:
-        pickle.dump(train_medians.to_dict(), f)
-
     tuning_report = {
         "random_state": RANDOM_STATE,
         "active_train_features": ACTIVE_TRAIN_FEATURES,
@@ -353,7 +338,6 @@ def main():
 
     print("\n✅ Model & metadata standar tersimpan.")
     print("✅ Tuning report: ga_tuning_report.json")
-
 
 if __name__ == "__main__":
     main()
