@@ -9,6 +9,7 @@ import pandas as pd
 import requests
 import tldextract
 from flask import Flask, jsonify, request, send_from_directory
+import os
 
 try:
     from bs4 import BeautifulSoup
@@ -57,6 +58,42 @@ WEB_CONTENT_KEYS = {
 
 _TLD_EXTRACTOR = tldextract.TLDExtract(suffix_list_urls=None)
 app = Flask(__name__, static_folder="static")
+
+# =========================
+# LOGGING FITUR EKSTRAKSI KE EXCEL
+# =========================
+LOG_PATH = "log_feature_extraction.xlsx"
+
+def log_feature_extraction(url, mode, feats, feature_columns_81):
+    if os.path.exists(LOG_PATH):
+        try:
+            df = pd.read_excel(LOG_PATH)
+            no = int(df["NO"].max()) + 1
+        except Exception:
+            df = None
+            no = 1
+    else:
+        df = None
+        no = 1
+    row = {
+        "NO": no,
+        "LINK": url,
+        "MODE": mode,
+    }
+    for feat in feature_columns_81:
+        row[feat] = feats.get(feat, 0.0)
+    row_df = pd.DataFrame([row])
+    if df is None:
+        row_df.to_excel(LOG_PATH, index=False)
+    else:
+        with pd.ExcelWriter(LOG_PATH, mode="a", engine="openpyxl", if_sheet_exists="overlay") as writer:
+            row_df.to_excel(writer, index=False, header=False, startrow=len(df)+1)
+
+# Load feature_columns_81.txt sekali saja
+try:
+    FEATURE_COLUMNS_81 = [line.strip() for line in open("feature_columns_81.txt", encoding="utf-8") if line.strip()]
+except Exception:
+    FEATURE_COLUMNS_81 = []
 
 # =========================
 # Loader Dinamis Model & Fitur
@@ -625,6 +662,12 @@ def predict():
 
     rf, xgb, meta, cols, web_content_ok = get_model_and_features(url)
     include_web_content = web_content_ok
+
+    # --- LOGGING FITUR KE EXCEL ---
+    feats_full = extract_features(url, include_web_content=True)
+    mode = "81" if web_content_ok else "37"
+    log_feature_extraction(url, mode, feats_full, FEATURE_COLUMNS_81)
+    # --- END LOGGING ---
 
     risk_score, risk_category, rule_flag, rule_detail = rule_based_eval(url, return_detail=True)
     rule_prob = clamp01(risk_score / 10.0)
