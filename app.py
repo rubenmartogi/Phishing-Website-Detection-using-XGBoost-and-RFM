@@ -16,21 +16,13 @@ except Exception:
     BeautifulSoup = None
 
 # KONFIGURASI
-FEATURE_COLUMNS_PATH = "feature_columns.txt"
-RF_MODEL_PATH = "random_forest_model.pkl"
-XGB_MODEL_PATH = "xgboost_model.pkl"
-META_MODEL_PATH = "rule_lr.pkl"
-
 PHISHING_CLASS_VALUE = 1
-
 DEFAULT_PREDICT_MODE = "url37"
 DEFAULT_USE_PREFILTER = True
 DEFAULT_DECISION_MODE = "hybrid_prefilter"
-
 PREFILTER_HARD_PHISHING_SCORE = 7
 PREFILTER_BLOCK_ON_VI_HIT = True
 PREFILTER_PHISHING_MIN_CONF = 0.95
-
 WEB_FETCH_TIMEOUT = 6
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
@@ -66,13 +58,23 @@ WEB_CONTENT_KEYS = {
 _TLD_EXTRACTOR = tldextract.TLDExtract(suffix_list_urls=None)
 app = Flask(__name__, static_folder="static")
 
-_RF_MODEL = None
-_XGB_MODEL = None
-_META_MODEL = None
+# =========================
+# Loader Dinamis Model & Fitur
+# =========================
+def load_model(path):
+    with open(path, "rb") as f:
+        return pickle.load(f)
 
-# =========================================================
-# UTILITY FUNCTIONS
-# =========================================================
+def load_feature_columns(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return [line.strip() for line in f if line.strip()]
+    except Exception:
+        return []
+
+# =========================
+# Utility Functions
+# =========================
 def entropy(s: str) -> float:
     if not s:
         return 0.0
@@ -117,13 +119,6 @@ def normalize_decision_mode(v: str) -> str:
         "rule_ml_stacking": "hybrid_prefilter",
     }
     return aliases.get(x, DEFAULT_DECISION_MODE)
-
-def get_feature_columns():
-    try:
-        with open(FEATURE_COLUMNS_PATH, "r", encoding="utf-8") as f:
-            return [line.strip() for line in f if line.strip()]
-    except Exception:
-        return []
 
 def parse_url(url: str):
     u = (url or "").strip()
@@ -210,9 +205,6 @@ def _proba_for_class(model, X, class_value):
 def _label_to_phishing_flag(raw_label: int) -> int:
     return 1 if int(raw_label) == PHISHING_CLASS_VALUE else 0
 
-def _resolve_include_web_content(cols: list) -> bool:
-    return any(c in WEB_CONTENT_KEYS for c in cols)
-
 def _jsonable_classes(model):
     out = []
     if model is None:
@@ -224,9 +216,9 @@ def _jsonable_classes(model):
             out.append(str(c))
     return out
 
-# =========================================================
-# FEATURE EXTRACTION
-# =========================================================
+# =========================
+# Feature Extraction
+# =========================
 def extract_url_features(url: str) -> dict:
     full, parsed, hostname, path = parse_url(url)
     subdomain, domain, tld = _extract_parts(hostname)
@@ -461,9 +453,9 @@ def extract_features(url: str, include_web_content: bool) -> dict:
         feats.update(extract_web_content_features(full_url))
     return feats
 
-# =========================================================
-# RULE-BASED EVALUATION
-# =========================================================
+# =========================
+# Rule-Based Evaluation
+# =========================
 def rule_based_eval(url: str, return_detail: bool = False):
     feats = extract_url_features(url)
 
@@ -530,92 +522,68 @@ def rule_based_eval(url: str, return_detail: bool = False):
 
     return risk_score, category, rule_flag
 
-# =========================================================
-# MODEL LOADING & PREDICTION
-# =========================================================
-def load_models():
-    global _RF_MODEL, _XGB_MODEL, _META_MODEL
-
-    if _RF_MODEL is None:
-        with open(RF_MODEL_PATH, "rb") as f:
-            _RF_MODEL = pickle.load(f)
-
-    if _XGB_MODEL is None:
-        with open(XGB_MODEL_PATH, "rb") as f:
-            _XGB_MODEL = pickle.load(f)
-
-    if _META_MODEL is None:
-        try:
-            with open(META_MODEL_PATH, "rb") as f:
-                _META_MODEL = pickle.load(f)
-        except Exception:
-            _META_MODEL = None
-
-    return _RF_MODEL, _XGB_MODEL, _META_MODEL
+# =========================
+# PILIH MODEL & FITUR SESUAI URL
+# =========================
+def get_model_and_features(url):
+    feats = extract_features(url, include_web_content=True)
+    web_content_ok = any(feats.get(k, None) not in (None, 0) for k in WEB_CONTENT_KEYS)
+    if web_content_ok:
+        suffix = "_81"
+    else:
+        suffix = "_37"
+    rf = load_model(f"random_forest_model{suffix}.pkl")
+    xgb = load_model(f"xgboost_model{suffix}.pkl")
+    try:
+        meta = load_model(f"rule_lr{suffix}.pkl")
+    except Exception:
+        meta = None
+    cols = load_feature_columns(f"feature_columns{suffix}.txt")
+    return rf, xgb, meta, cols, web_content_ok
 
 def build_ml_vector(url: str, cols: list, include_web_content: bool):
     feats = extract_features(url, include_web_content=include_web_content)
-
-    if "suspecious_tld" in cols and "suspecious_tld" not in feats:
-        feats["suspecious_tld"] = feats.get("suspicious_tld", 0)
-    if "suspicious_tld" in cols and "suspicious_tld" not in feats:
-        feats["suspicious_tld"] = feats.get("suspecious_tld", 0)
-
-    vector = []
-    for c in cols:
-        if c not in feats:
-            raise ValueError(f"Fitur {c} tidak tersedia dari URL yang diberikan.")
-        vector.append(to_float(feats[c], 0.0))
-
-    return np.array([vector], dtype=float)
+    vector = [to_float(feats.get(c, 0.0), 0.0) for c in cols]
+    return np.array([vector], dtype=float), cols
 
 def predict_models(
     url: str,
     cols: list,
     include_web_content: bool,
     precomputed_rule_score: float = None,
-    precomputed_rule_flag: int = None
+    precomputed_rule_flag: int = None,
+    rf=None, xgb=None, meta=None
 ):
-    rf, xgb, meta = load_models()
-    X = build_ml_vector(url, cols, include_web_content)
-    features_df = pd.DataFrame(X, columns=cols)
-
+    X, used_cols = build_ml_vector(url, cols, include_web_content)
+    features_df = pd.DataFrame(X, columns=used_cols)
     rf_raw = int(rf.predict(features_df)[0])
     xgb_raw = int(xgb.predict(features_df)[0])
-
     rf_pred = _label_to_phishing_flag(rf_raw)
     xgb_pred = _label_to_phishing_flag(xgb_raw)
-
     rf_prob = _proba_for_class(rf, features_df, PHISHING_CLASS_VALUE)
     xgb_prob = _proba_for_class(xgb, features_df, PHISHING_CLASS_VALUE)
-
     stack_pred, stack_prob, meta_n_in = None, None, None
     if meta is not None:
         try:
             meta_n_in = int(getattr(meta, "n_features_in_", 2))
         except Exception:
             meta_n_in = 2
-
         rule_score = precomputed_rule_score
         rule_flag = precomputed_rule_flag
         if rule_score is None or rule_flag is None:
             rule_score, _, rule_flag = rule_based_eval(url)
-
         meta_feats = [rf_prob, xgb_prob]
         if meta_n_in >= 3:
             meta_feats = [rf_prob, xgb_prob, rule_flag]
             if meta_n_in >= 4:
                 meta_feats = [rf_prob, xgb_prob, rule_flag, rule_score]
-
         meta_X = np.array([meta_feats[:meta_n_in]], dtype=float)
-
         try:
             stack_raw = int(meta.predict(meta_X)[0])
             stack_pred = _label_to_phishing_flag(stack_raw)
             stack_prob = _proba_for_class(meta, meta_X, PHISHING_CLASS_VALUE)
         except Exception:
             stack_pred, stack_prob = None, None
-
     return {
         "rf_raw": rf_raw,
         "xgb_raw": xgb_raw,
@@ -631,33 +599,16 @@ def predict_models(
         "meta_classes": _jsonable_classes(meta),
     }
 
-# =========================================================
+# =========================
 # ROUTES
-# =========================================================
+# =========================
 @app.get("/")
 def index():
     return send_from_directory("Phishing_detection_app", "advanced_hybrid_detector.html")
 
 @app.get("/health")
 def health():
-    cols = get_feature_columns()
-    return jsonify({
-        "status": "ok",
-        "feature_count": len(cols),
-        "pipeline": "single_pipeline(rule_prefilter_phishing_only -> ml_for_suspicious)",
-        "supported_decision_modes": [
-            "rf_only",
-            "xgb_only",
-            "ml_stacking_only",
-            "hybrid_prefilter"
-        ],
-        "default_decision_mode": DEFAULT_DECISION_MODE,
-        "web_content_auto": _resolve_include_web_content(cols),
-        "phishing_class_value": PHISHING_CLASS_VALUE,
-        "default_use_prefilter": DEFAULT_USE_PREFILTER,
-        "prefilter_hard_phishing_score": PREFILTER_HARD_PHISHING_SCORE,
-        "prefilter_block_on_vi_hit": PREFILTER_BLOCK_ON_VI_HIT
-    })
+    return jsonify({"status": "ok"})
 
 @app.post("/predict")
 def predict():
@@ -672,13 +623,9 @@ def predict():
     if not is_valid_url(url):
         return jsonify({"error": "URL tidak valid. Contoh: https://example.com"}), 400
 
-    cols = get_feature_columns()
-    if not cols:
-        return jsonify({"error": "feature_columns.txt tidak ditemukan atau kosong"}), 500
+    rf, xgb, meta, cols, web_content_ok = get_model_and_features(url)
+    include_web_content = web_content_ok
 
-    include_web_content = _resolve_include_web_content(cols)
-
-    # Rule-based dihitung sekali
     risk_score, risk_category, rule_flag, rule_detail = rule_based_eval(url, return_detail=True)
     rule_prob = clamp01(risk_score / 10.0)
 
@@ -693,11 +640,9 @@ def predict():
     ):
         p_phish = clamp01(final_phishing_prob)
         p_safe = clamp01(1.0 - p_phish)
-
         final_label = 1 if p_phish >= 0.6 else 0
         category = "phishing" if final_label == 1 else "benign"
         confidence = p_phish if final_label == 1 else p_safe
-
         resp = {
             "final_label": final_label,
             "final_phishing_prob": p_phish,
@@ -717,7 +662,6 @@ def predict():
             "category": category,
             "confidence": confidence,
         }
-
         if debug:
             resp["debug"] = {
                 "prefilter_enabled": use_prefilter,
@@ -728,7 +672,6 @@ def predict():
                 "risk_category": risk_category,
                 "rule_detail": rule_detail,
             }
-
         return jsonify(resp)
 
     # MODE 1: RANDOM FOREST ONLY
@@ -738,7 +681,8 @@ def predict():
             cols=cols,
             include_web_content=include_web_content,
             precomputed_rule_score=risk_score,
-            precomputed_rule_flag=rule_flag
+            precomputed_rule_flag=rule_flag,
+            rf=rf, xgb=xgb, meta=meta
         )
         p = clamp01(float(preds.get("rf_prob") or 0.0))
         return build_response(
@@ -757,7 +701,8 @@ def predict():
             cols=cols,
             include_web_content=include_web_content,
             precomputed_rule_score=risk_score,
-            precomputed_rule_flag=rule_flag
+            precomputed_rule_flag=rule_flag,
+            rf=rf, xgb=xgb, meta=meta
         )
         p = clamp01(float(preds.get("xgb_prob") or 0.0))
         return build_response(
@@ -776,9 +721,9 @@ def predict():
             cols=cols,
             include_web_content=include_web_content,
             precomputed_rule_score=risk_score,
-            precomputed_rule_flag=rule_flag
+            precomputed_rule_flag=rule_flag,
+            rf=rf, xgb=xgb, meta=meta
         )
-
         if preds.get("stack_prob") is not None:
             p = clamp01(float(preds["stack_prob"]))
             source = "ml_stacking_only"
@@ -789,7 +734,6 @@ def predict():
             p = clamp01(0.5 * rf_p + 0.5 * xgb_p)
             source = "ml_rf_xgb_average_only"
             model_name = "RF + XGB Average (Meta model unavailable)"
-
         return build_response(
             final_phishing_prob=p,
             decision_source=source,
@@ -815,9 +759,9 @@ def predict():
         cols=cols,
         include_web_content=include_web_content,
         precomputed_rule_score=risk_score,
-        precomputed_rule_flag=rule_flag
+        precomputed_rule_flag=rule_flag,
+        rf=rf, xgb=xgb, meta=meta
     )
-
     if preds.get("stack_prob") is not None:
         p = clamp01(float(preds["stack_prob"]))
         source = "ml_stacking_only"
@@ -828,7 +772,6 @@ def predict():
         p = clamp01(0.5 * rf_p + 0.5 * xgb_p)
         source = "ml_rf_xgb_average_only"
         model_name = "RF + XGB Average (Meta model unavailable)"
-
     return build_response(
         final_phishing_prob=p,
         decision_source=source,

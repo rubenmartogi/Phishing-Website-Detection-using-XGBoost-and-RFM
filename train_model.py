@@ -16,8 +16,6 @@ RANDOM_STATE = 12
 TEST_SIZE = 0.2
 TARGET_COL = "label"
 
-ACTIVE_TRAIN_FEATURES = "hybrid81"  # "url37" atau "hybrid81"
-
 # GA settings
 GA_POP_SIZE = 16
 GA_N_GEN = 8
@@ -68,7 +66,7 @@ def prep_X(df: pd.DataFrame, cols, idx) -> pd.DataFrame:
     X = df.loc[idx].reindex(columns=cols)
     return X.apply(pd.to_numeric, errors="coerce")
 
-def load_and_prepare_data():
+def load_and_prepare_data(feature_mode):
     if not os.path.exists(data_file_path):
         raise FileNotFoundError(f"Dataset tidak ditemukan: {data_file_path}")
 
@@ -89,7 +87,10 @@ def load_and_prepare_data():
     webcontent_features_44 = [c for c in all_features if c not in url_features_37]
     hybrid_features_81 = url_features_37 + webcontent_features_44
 
-    feature_candidates = hybrid_features_81 if ACTIVE_TRAIN_FEATURES == "hybrid81" else url_features_37
+    if feature_mode == "hybrid81":
+        feature_candidates = hybrid_features_81
+    else:
+        feature_candidates = url_features_37
 
     train_idx, test_idx = train_test_split(
         data.index,
@@ -114,7 +115,7 @@ def load_and_prepare_data():
     y_train = y_all.loc[X_train.index]
     y_test = y_all.loc[X_test.index]
 
-    print(f"Mode: {ACTIVE_TRAIN_FEATURES}")
+    print(f"Mode: {feature_mode}")
     print(f"URL features target: {len(url_features_37)}")
     print(f"Web-content features: {len(webcontent_features_44)}")
     print(f"Selected actual features: {len(selected_features)}")
@@ -131,7 +132,6 @@ def tune_rf_ga(X_train, y_train):
     cv = StratifiedKFold(n_splits=GA_CV_SPLITS, shuffle=True, random_state=RANDOM_STATE)
 
     def init_ind():
-        # [n_estimators, max_depth, min_samples_split, min_samples_leaf, max_features_idx]
         return rf_ind_cls([
             random.randint(100, 500),
             random.randint(3, 16),
@@ -200,7 +200,6 @@ def tune_xgb_ga(X_train, y_train):
     cv = StratifiedKFold(n_splits=GA_CV_SPLITS, shuffle=True, random_state=RANDOM_STATE)
 
     def init_ind():
-        # [n_estimators, learning_rate, max_depth, subsample, colsample_bytree, min_child_weight, gamma, reg_alpha, reg_lambda]
         return xgb_ind_cls([
             random.randint(150, 500),
             random.uniform(0.01, 0.30),
@@ -236,7 +235,6 @@ def tune_xgb_ga(X_train, y_train):
         return (float(score),)
 
     def mutate(ind, indpb=0.25):
-        # Mutasi ringan per gen, lalu clamp di decode
         for i in range(len(ind)):
             if random.random() < indpb:
                 if i in (0, 2):
@@ -272,29 +270,24 @@ def tune_xgb_ga(X_train, y_train):
     print("[GA] XGB best params:", best_params)
     return best_params, best_score
 
-def main():
-    seed_everything(RANDOM_STATE)
+def train_and_save(feature_mode, suffix):
+    X_train, X_test, y_train, y_test, selected_features = load_and_prepare_data(feature_mode)
 
-    X_train, X_test, y_train, y_test, selected_features = load_and_prepare_data()
-
-    # GA tune
     best_rf_params, best_rf_cv_f1 = tune_rf_ga(X_train, y_train)
     best_xgb_params, best_xgb_cv_f1 = tune_xgb_ga(X_train, y_train)
 
-    # Train final models with best params
     rf_model = RandomForestClassifier(**best_rf_params)
     rf_model.fit(X_train, y_train)
     rf_pred = rf_model.predict(X_test)
     rf_prob = rf_model.predict_proba(X_test)[:, 1]
-    print_metrics("Random Forest (GA Tuned)", y_test, rf_pred, rf_prob)
+    print_metrics(f"Random Forest (GA Tuned) {suffix}", y_test, rf_pred, rf_prob)
 
     xgb_model = XGBClassifier(**best_xgb_params)
     xgb_model.fit(X_train, y_train)
     xgb_pred = xgb_model.predict(X_test)
     xgb_prob = xgb_model.predict_proba(X_test)[:, 1]
-    print_metrics("XGBoost (GA Tuned)", y_test, xgb_pred, xgb_prob)
+    print_metrics(f"XGBoost (GA Tuned) {suffix}", y_test, xgb_pred, xgb_prob)
 
-    # Stacking
     stack_model = StackingClassifier(
         estimators=[("rf", rf_model), ("xgb", xgb_model)],
         final_estimator=LogisticRegression(max_iter=1000, class_weight="balanced", random_state=RANDOM_STATE),
@@ -304,24 +297,21 @@ def main():
     stack_model.fit(X_train, y_train)
     stack_pred = stack_model.predict(X_test)
     stack_prob = stack_model.predict_proba(X_test)[:, 1]
-    print_metrics("Stacking (RF+XGB+LR)", y_test, stack_pred, stack_prob)
+    print_metrics(f"Stacking (RF+XGB+LR) {suffix}", y_test, stack_pred, stack_prob)
 
     # Save model artifacts
-    with open(os.path.join(current_dir, "random_forest_model.pkl"), "wb") as f:
+    with open(os.path.join(current_dir, f"random_forest_model{suffix}.pkl"), "wb") as f:
         pickle.dump(rf_model, f)
-
-    with open(os.path.join(current_dir, "xgboost_model.pkl"), "wb") as f:
+    with open(os.path.join(current_dir, f"xgboost_model{suffix}.pkl"), "wb") as f:
         pickle.dump(xgb_model, f)
-
-    with open(os.path.join(current_dir, "rule_lr.pkl"), "wb") as f:
+    with open(os.path.join(current_dir, f"rule_lr{suffix}.pkl"), "wb") as f:
         pickle.dump(stack_model.final_estimator_, f)
-
-    with open(os.path.join(current_dir, "feature_columns.txt"), "w", encoding="utf-8") as f:
+    with open(os.path.join(current_dir, f"feature_columns{suffix}.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(selected_features))
 
     tuning_report = {
         "random_state": RANDOM_STATE,
-        "active_train_features": ACTIVE_TRAIN_FEATURES,
+        "feature_mode": feature_mode,
         "ga": {
             "population": GA_POP_SIZE,
             "generations": GA_N_GEN,
@@ -332,12 +322,17 @@ def main():
             "xgb_best_params": best_xgb_params,
         }
     }
-
-    with open(os.path.join(current_dir, "ga_tuning_report.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(current_dir, f"ga_tuning_report{suffix}.json"), "w", encoding="utf-8") as f:
         json.dump(tuning_report, f, indent=2)
 
-    print("\n✅ Model & metadata standar tersimpan.")
-    print("✅ Tuning report: ga_tuning_report.json")
+    print(f"\n✅ Model & metadata {suffix} tersimpan.")
+
+def main():
+    seed_everything(RANDOM_STATE)
+    # Train hybrid81
+    train_and_save("hybrid81", "_81")
+    # Train url37
+    train_and_save("url37", "_37")
 
 if __name__ == "__main__":
     main()
