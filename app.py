@@ -64,7 +64,7 @@ app = Flask(__name__, static_folder="static")
 # =========================
 LOG_PATH = "log_feature_extraction.xlsx"
 
-def log_feature_extraction(url, mode, feats, feature_columns_81):
+def log_feature_extraction(url, mode, feats, feature_columns_81, status):
     if os.path.exists(LOG_PATH):
         try:
             df = pd.read_excel(LOG_PATH)
@@ -77,8 +77,9 @@ def log_feature_extraction(url, mode, feats, feature_columns_81):
         no = 1
     row = {
         "NO": no,
-        "LINK": url,
+        "URL": url,
         "MODE": mode,
+        "STATUS": status,
     }
     for feat in feature_columns_81:
         row[feat] = feats.get(feat, 0.0)
@@ -663,11 +664,8 @@ def predict():
     rf, xgb, meta, cols, web_content_ok = get_model_and_features(url)
     include_web_content = web_content_ok
 
-    # --- LOGGING FITUR KE EXCEL ---
     feats_full = extract_features(url, include_web_content=True)
     mode = "81" if web_content_ok else "37"
-    log_feature_extraction(url, mode, feats_full, FEATURE_COLUMNS_81)
-    # --- END LOGGING ---
 
     risk_score, risk_category, rule_flag, rule_detail = rule_based_eval(url, return_detail=True)
     rule_prob = clamp01(risk_score / 10.0)
@@ -715,6 +713,8 @@ def predict():
                 "risk_category": risk_category,
                 "rule_detail": rule_detail,
             }
+        # Logging setelah hasil prediksi akhir diketahui
+        log_feature_extraction(url, mode, feats_full, FEATURE_COLUMNS_81, category)
         return jsonify(resp)
 
     # MODE 1: RANDOM FOREST ONLY
