@@ -59,9 +59,8 @@ WEB_CONTENT_KEYS = {
 _TLD_EXTRACTOR = tldextract.TLDExtract(suffix_list_urls=None)
 app = Flask(__name__, static_folder="static")
 
-# =========================
+
 # LOGGING FITUR EKSTRAKSI KE EXCEL
-# =========================
 LOG_PATH = "log_feature_extraction.xlsx"
 
 def log_feature_extraction(url, mode, feats, feature_columns_81, status):
@@ -96,9 +95,7 @@ try:
 except Exception:
     FEATURE_COLUMNS_81 = []
 
-# =========================
 # Loader Dinamis Model & Fitur
-# =========================
 def load_model(path):
     with open(path, "rb") as f:
         return pickle.load(f)
@@ -110,9 +107,7 @@ def load_feature_columns(path):
     except Exception:
         return []
 
-# =========================
 # Utility Functions
-# =========================
 def entropy(s: str) -> float:
     if not s:
         return 0.0
@@ -254,9 +249,7 @@ def _jsonable_classes(model):
             out.append(str(c))
     return out
 
-# =========================
 # Feature Extraction
-# =========================
 def extract_url_features(url: str) -> dict:
     full, parsed, hostname, path = parse_url(url)
     subdomain, domain, tld = _extract_parts(hostname)
@@ -491,9 +484,7 @@ def extract_features(url: str, include_web_content: bool) -> dict:
         feats.update(extract_web_content_features(full_url))
     return feats
 
-# =========================
 # Rule-Based Evaluation
-# =========================
 def rule_based_eval(url: str, return_detail: bool = False):
     feats = extract_url_features(url)
 
@@ -537,16 +528,21 @@ def rule_based_eval(url: str, return_detail: bool = False):
     imp_count = len(imp_hits)
     less_count = len(less_hits)
 
-    risk_score = (3 * vi_count) + (2 * imp_count) + less_count  
-    if (vi_count >= 1) or (risk_score >= PREFILTER_HARD_PHISHING_SCORE):
+    risk_score = (2 * imp_count) + less_count
+    NEW_THRESHOLD = 5
+
+    if vi_count >= 1:
         category = "Phishing"
-        rule_flag = 1  
+        rule_flag = 1
+    elif risk_score >= NEW_THRESHOLD:
+        category = "Phishing"
+        rule_flag = 1
     elif risk_score > 0:
         category = "Suspicious"
-        rule_flag = 0  
+        rule_flag = 0
     else:
         category = "Benign"
-        rule_flag = 0 
+        rule_flag = 0
 
     if return_detail:
         return risk_score, category, rule_flag, {
@@ -560,9 +556,7 @@ def rule_based_eval(url: str, return_detail: bool = False):
 
     return risk_score, category, rule_flag
 
-# =========================
 # PILIH MODEL & FITUR SESUAI URL
-# =========================
 def get_model_and_features(url):
     feats = extract_features(url, include_web_content=True)
     web_content_ok = any(feats.get(k, None) not in (None, 0) for k in WEB_CONTENT_KEYS)
@@ -637,9 +631,8 @@ def predict_models(
         "meta_classes": _jsonable_classes(meta),
     }
 
-# =========================
+
 # ROUTES
-# =========================
 @app.get("/")
 def index():
     return send_from_directory("Phishing_detection_app", "advanced_hybrid_detector.html")
