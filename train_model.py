@@ -21,7 +21,7 @@ GA_POP_SIZE = 16
 GA_N_GEN = 8
 GA_CXPB = 0.7
 GA_MUTPB = 0.3
-GA_CV_SPLITS = 3
+GA_CV_SPLITS = 5
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 data_file_path = os.path.join(current_dir, "DataFiles", "data_cleaning.csv")

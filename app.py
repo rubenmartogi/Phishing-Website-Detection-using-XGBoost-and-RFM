@@ -8,15 +8,59 @@ import numpy as np
 import pandas as pd
 import requests
 import tldextract
+import shap
 from flask import Flask, jsonify, request, send_from_directory
 import os
+
+def explain_prediction(model, X_row, feature_names, top_n=3, background=None):
+    import shap
+    import numpy as np
+    try:
+        explainer = shap.TreeExplainer(model)
+        shap_values = explainer.shap_values(X_row)
+        if isinstance(shap_values, list) and len(shap_values) == 2:
+            shap_vals = np.array(shap_values[1]).flatten()
+        elif isinstance(shap_values, list):
+            shap_vals = np.array(shap_values[0]).flatten()
+        else:
+            shap_vals = np.array(shap_values).flatten()
+        top = sorted(zip(feature_names, np.abs(shap_vals)), key=lambda x: x[1], reverse=True)[:top_n]
+        return top, f"{', '.join(f'{k} ({v:.3f})' for k,v in top)}"
+    except Exception as e_tree:
+        try:
+            arr = X_row.values if hasattr(X_row, "values") else np.array(X_row)
+            # Gunakan background yang lebih bervariasi untuk meta stacking
+            if background is None:
+                # Contoh: background 5 kombinasi probabilitas
+                background = np.array([
+                    [0.0, 0.0],
+                    [0.0, 1.0],
+                    [1.0, 0.0],
+                    [1.0, 1.0],
+                    [0.5, 0.5]
+                ])
+                if arr.shape[1] > 2:
+                    # Tambahkan kolom rule_flag/risk_score jika ada
+                    extra = np.zeros((background.shape[0], arr.shape[1] - 2))
+                    background = np.hstack([background, extra])
+            explainer = shap.KernelExplainer(model.predict_proba, background)
+            shap_values = explainer.shap_values(arr, nsamples=100)
+            if isinstance(shap_values, list) and len(shap_values) == 2:
+                shap_vals = np.array(shap_values[1]).flatten()
+            elif isinstance(shap_values, list):
+                shap_vals = np.array(shap_values[0]).flatten()
+            else:
+                shap_vals = np.array(shap_values).flatten()
+            top = sorted(zip(feature_names, np.abs(shap_vals)), key=lambda x: x[1], reverse=True)[:top_n]
+            return top, f"(KernelExplainer) {', '.join(f'{k} ({v:.3f})' for k,v in top)}"
+        except Exception as e_kernel:
+            return [], f"Penjelasan otomatis gagal: {str(e_kernel)}"
 
 try:
     from bs4 import BeautifulSoup
 except Exception:
     BeautifulSoup = None
 
-# KONFIGURASI
 PHISHING_CLASS_VALUE = 1
 DEFAULT_PREDICT_MODE = "url37"
 DEFAULT_USE_PREFILTER = True
@@ -59,8 +103,6 @@ WEB_CONTENT_KEYS = {
 _TLD_EXTRACTOR = tldextract.TLDExtract(suffix_list_urls=None)
 app = Flask(__name__, static_folder="static")
 
-
-# LOGGING FITUR EKSTRAKSI KE EXCEL
 LOG_PATH = "log_feature_extraction.xlsx"
 
 def log_feature_extraction(url, mode, feats, feature_columns_81, status):
@@ -89,13 +131,11 @@ def log_feature_extraction(url, mode, feats, feature_columns_81, status):
         with pd.ExcelWriter(LOG_PATH, mode="a", engine="openpyxl", if_sheet_exists="overlay") as writer:
             row_df.to_excel(writer, index=False, header=False, startrow=len(df)+1)
 
-# Load feature_columns_81.txt sekali saja
 try:
     FEATURE_COLUMNS_81 = [line.strip() for line in open("feature_columns_81.txt", encoding="utf-8") if line.strip()]
 except Exception:
     FEATURE_COLUMNS_81 = []
 
-# Loader Dinamis Model & Fitur
 def load_model(path):
     with open(path, "rb") as f:
         return pickle.load(f)
@@ -107,7 +147,6 @@ def load_feature_columns(path):
     except Exception:
         return []
 
-# Utility Functions
 def entropy(s: str) -> float:
     if not s:
         return 0.0
@@ -125,42 +164,6 @@ def to_float(v, default=0.0) -> float:
         return x
     except Exception:
         return float(default)
-
-def to_bool(v, default=False) -> bool:
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, str):
-        return v.strip().lower() in {"1", "true", "yes", "y", "on"}
-    if isinstance(v, (int, float)):
-        return bool(v)
-    return default
-
-def normalize_decision_mode(v: str) -> str:
-    x = str(v or "").strip().lower()
-    aliases = {
-        "rf": "rf_only",
-        "rf_only": "rf_only",
-        "random_forest": "rf_only",
-        "xgb": "xgb_only",
-        "xgboost": "xgb_only",
-        "xgb_only": "xgb_only",
-        "ml": "ml_stacking_only",
-        "stacking": "ml_stacking_only",
-        "ml_stacking_only": "ml_stacking_only",
-        "hybrid": "hybrid_prefilter",
-        "hybrid_prefilter": "hybrid_prefilter",
-        "rule_ml_stacking": "hybrid_prefilter",
-    }
-    return aliases.get(x, DEFAULT_DECISION_MODE)
-
-def parse_url(url: str):
-    u = (url or "").strip()
-    if not u.startswith(("http://", "https://")):
-        u = "http://" + u
-    parsed = urlparse(u)
-    hostname = (parsed.hostname or "").lower()
-    path = parsed.path or ""
-    return u, parsed, hostname, path
 
 def is_ip(hostname: str) -> int:
     try:
@@ -249,7 +252,15 @@ def _jsonable_classes(model):
             out.append(str(c))
     return out
 
-# Feature Extraction
+def parse_url(url: str):
+    u = (url or "").strip()
+    if not u.startswith(("http://", "https://")):
+        u = "http://" + u
+    parsed = urlparse(u)
+    hostname = (parsed.hostname or "").lower()
+    path = parsed.path or ""
+    return u, parsed, hostname, path
+
 def extract_url_features(url: str) -> dict:
     full, parsed, hostname, path = parse_url(url)
     subdomain, domain, tld = _extract_parts(hostname)
@@ -575,7 +586,10 @@ def get_model_and_features(url):
 
 def build_ml_vector(url: str, cols: list, include_web_content: bool):
     feats = extract_features(url, include_web_content=include_web_content)
+    print("[DEBUG] build_ml_vector: feats =", feats)
     vector = [to_float(feats.get(c, 0.0), 0.0) for c in cols]
+    print("[DEBUG] build_ml_vector: vector =", vector)
+    print("[DEBUG] build_ml_vector: cols =", cols)
     return np.array([vector], dtype=float), cols
 
 def predict_models(
@@ -588,6 +602,7 @@ def predict_models(
 ):
     X, used_cols = build_ml_vector(url, cols, include_web_content)
     features_df = pd.DataFrame(X, columns=used_cols)
+    print("[DEBUG] predict_models: features_df =\n", features_df)
     rf_raw = int(rf.predict(features_df)[0])
     xgb_raw = int(xgb.predict(features_df)[0])
     rf_pred = _label_to_phishing_flag(rf_raw)
@@ -609,7 +624,9 @@ def predict_models(
             meta_feats = [rf_prob, xgb_prob, rule_flag]
             if meta_n_in >= 4:
                 meta_feats = [rf_prob, xgb_prob, rule_flag, rule_score]
+        print("[DEBUG] predict_models: meta_feats =", meta_feats)
         meta_X = np.array([meta_feats[:meta_n_in]], dtype=float)
+        print("[DEBUG] predict_models: meta_X =", meta_X)
         try:
             stack_raw = int(meta.predict(meta_X)[0])
             stack_pred = _label_to_phishing_flag(stack_raw)
@@ -640,6 +657,29 @@ def index():
 @app.get("/health")
 def health():
     return jsonify({"status": "ok"})
+
+def to_bool(val, default=False):
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        return val.strip().lower() in ("1", "true", "yes", "y", "on")
+    if isinstance(val, (int, float)):
+        return bool(val)
+    return default
+
+def normalize_decision_mode(mode):
+    if not mode:
+        return DEFAULT_DECISION_MODE
+    m = str(mode).strip().lower()
+    if m in ("rf", "rf_only"):
+        return "rf_only"
+    if m in ("xgb", "xgb_only"):
+        return "xgb_only"
+    if m in ("stack", "stacking", "ml_stacking_only"):
+        return "ml_stacking_only"
+    if m in ("hybrid", "hybrid_prefilter"):
+        return "hybrid_prefilter"
+    return m
 
 @app.post("/predict")
 def predict():
@@ -677,6 +717,72 @@ def predict():
         final_label = 1 if p_phish >= 0.6 else 0
         category = "phishing" if final_label == 1 else "benign"
         confidence = p_phish if final_label == 1 else p_safe
+        shap_explanation = None
+        top_features = []
+        top_features_with_values = []
+
+        # --- Penjelasan ---
+        if decision_source == "rule_based_prefilter_phishing":
+            # Penjelasan manual untuk rule-based
+            vi_hits = rule_detail.get("vi_hits", [])
+            imp_hits = rule_detail.get("imp_hits", [])
+            less_hits = rule_detail.get("less_hits", [])
+            all_hits = vi_hits + imp_hits + less_hits
+            if all_hits:
+                explanation = f"Prediksi PHISHING oleh rule-based prefilter. Fitur rule yang memicu: {', '.join(all_hits)}"
+                top_features = all_hits[:3]
+            else:
+                explanation = "Prediksi PHISHING oleh rule-based prefilter."
+            shap_explanation = explanation
+        else:
+            # Pilih model yang digunakan untuk prediksi akhir
+            model_used = None
+            if decision_source in ["rf_only", "ml_rf_xgb_average_only"]:
+                model_used = rf
+            elif decision_source == "xgb_only":
+                model_used = xgb
+            elif decision_source == "ml_stacking_only":
+                model_used = meta if meta is not None else rf
+                try:
+                    # Siapkan vektor meta untuk stacking (bukan fitur asli)
+                    rf_prob = to_float(rf_prob, 0.0)
+                    xgb_prob = to_float(xgb_prob, 0.0)
+                    rule_flag_val = to_float(rule_flag, 0.0)
+                    risk_score_val = to_float(risk_score, 0.0)
+                    meta_n_in = getattr(model_used, "n_features_in_", 2)
+                    meta_feats = [rf_prob, xgb_prob]
+                    meta_feature_names = ["rf_prob", "xgb_prob"]
+                    if meta_n_in >= 3:
+                        meta_feats.append(rule_flag_val)
+                        meta_feature_names.append("rule_flag")
+                        if meta_n_in >= 4:
+                            meta_feats.append(risk_score_val)
+                            meta_feature_names.append("risk_score")
+                    meta_feats = meta_feats[:meta_n_in]
+                    meta_feature_names = meta_feature_names[:meta_n_in]
+                    meta_X = np.array([meta_feats], dtype=float)
+                    meta_X_df = pd.DataFrame(meta_X, columns=meta_feature_names)
+                    if model_used is not None:
+                        top_feats, explanation = explain_prediction(model_used, meta_X_df, meta_feature_names, top_n=3)
+                        top_features = [f for f, v in top_feats]
+                        top_features_with_values = [f"{f} ({v:+.2f})" for f, v in top_feats]
+                        shap_explanation = (
+                            f"Prediksi {category.upper()} dengan score {p_phish:.2f} menggunakan model {model_name}. "
+                            f"Fitur meta yang paling berkontribusi: {explanation}"
+                        )
+                        if (not explanation or explanation.strip() == "") and decision_source == "ml_stacking_only":
+                            shap_explanation = "Penjelasan otomatis tidak tersedia untuk model stacking (Logistic Regression)."
+                except Exception as e:
+                    if decision_source == "ml_stacking_only":
+                        shap_explanation = "Penjelasan otomatis tidak tersedia untuk model stacking (Logistic Regression)."
+                    else:
+                        shap_explanation = f"Penjelasan tidak tersedia: {e}"
+                    top_features = []
+
+        # Pastikan explanation selalu string dan tidak kosong
+        explanation_str = str(shap_explanation).strip() if shap_explanation else "Penjelasan tidak tersedia."
+        if not explanation_str:
+            explanation_str = "Penjelasan tidak tersedia."
         resp = {
             "final_label": final_label,
             "final_phishing_prob": p_phish,
@@ -695,6 +801,8 @@ def predict():
             "label": category,
             "category": category,
             "confidence": confidence,
+            "top_features": top_features,
+            "explanation": explanation_str,
         }
         if debug:
             resp["debug"] = {
@@ -706,6 +814,8 @@ def predict():
                 "risk_category": risk_category,
                 "rule_detail": rule_detail,
             }
+        # Debug print untuk memastikan explanation yang dikirim
+        print("[DEBUG] API response explanation:", repr(resp["explanation"]))
         # Logging setelah hasil prediksi akhir diketahui
         log_feature_extraction(url, mode, feats_full, FEATURE_COLUMNS_81, category)
         return jsonify(resp)

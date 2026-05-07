@@ -50,7 +50,8 @@ function backendToEnhancedResult(data, url) {
         category,
         decisionScore: pPhish,
         final_threshold: threshold,
-        url
+        url,
+        explanation: data.explanation || "-"
     };
 }
 
@@ -91,6 +92,12 @@ function displayEnhancedResult(result, url) {
                 <div class="mini-card"><span>Benign Range (0.00-${threshold.toFixed(2)})</span><b>${benignRangeText}</b></div>
                 <div class="mini-card"><span>Phishing Range (${threshold.toFixed(2)}-1.00)</span><b>${phishingRangeText}</b></div>
                 <div class="mini-card"><span>Zone</span><b>${zoneText}</b></div>
+                <div class="mini-card explanation-card">
+                    <span>Explanation</span>
+                    <b style="display:block; white-space:pre-wrap; text-align:left; font-weight:600;">
+                        ${(result.explanation && String(result.explanation).trim() ? result.explanation : "-")}
+                    </b>
+                </div>
             </div>
 
             <div class="url-box">
