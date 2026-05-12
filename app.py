@@ -130,6 +130,10 @@ def log_feature_extraction(url, mode, feats, feature_columns_81, status):
     else:
         with pd.ExcelWriter(LOG_PATH, mode="a", engine="openpyxl", if_sheet_exists="overlay") as writer:
             row_df.to_excel(writer, index=False, header=False, startrow=len(df)+1)
+        checked_features = feats.get('__checked_features__', None)
+        explanation = feats.get('__explanation__', None)
+        row["checked_features"] = checked_features or ""
+        row["explanation"] = explanation or ""
 
 try:
     FEATURE_COLUMNS_81 = [line.strip() for line in open("feature_columns_81.txt", encoding="utf-8") if line.strip()]
@@ -818,6 +822,7 @@ def predict():
         print("[DEBUG] API response explanation:", repr(resp["explanation"]))
         # Logging setelah hasil prediksi akhir diketahui
         log_feature_extraction(url, mode, feats_full, FEATURE_COLUMNS_81, category)
+        # Tidak ada explanation yang dikirim ke response
         return jsonify(resp)
 
     # MODE 1: RANDOM FOREST ONLY
