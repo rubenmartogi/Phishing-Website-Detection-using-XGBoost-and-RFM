@@ -42,6 +42,11 @@ function backendToEnhancedResult(data, url) {
         Number.isFinite(Number(data.final_threshold)) ? Number(data.final_threshold) : 0.6
     );
 
+    // Extract top influential features from explanation_detailed
+    const topFeatures = (data.explanation_detailed && data.explanation_detailed.top_influential_features) 
+        ? data.explanation_detailed.top_influential_features.slice(0, 5) 
+        : [];
+
     return {
         result: isPhishing ? "PHISHING" : "BENIGN",
         algorithm: displayModelName,
@@ -51,7 +56,8 @@ function backendToEnhancedResult(data, url) {
         decisionScore: pPhish,
         final_threshold: threshold,
         url,
-        explanation: data.explanation || "-"
+        explanation: data.explanation || "-",
+        topFeatures: topFeatures
     };
 }
 
@@ -75,10 +81,30 @@ function displayEnhancedResult(result, url) {
 
     const benignRangeText = score < threshold ? score.toFixed(2) : "-";
     const phishingRangeText = score >= threshold ? score.toFixed(2) : "-";
-    const zoneText =
-        score >= threshold
-            ? `PHISHING ZONE (${threshold.toFixed(2)}-1.00)`
-            : `BENIGN ZONE (0.00-${threshold.toFixed(2)})`;
+
+    // Build top features HTML
+    let topFeaturesHtml = "";
+    if (result.topFeatures && result.topFeatures.length > 0) {
+        topFeaturesHtml = `
+            <div class="mini-card features-card">
+                <span>⭐ Top Influential Features</span>
+                <div class="features-list">
+        `;
+        result.topFeatures.forEach((feat, idx) => {
+            const impactEmoji = feat.impact === "PHISHING" ? "🔴" : (feat.impact === "BENIGN" ? "🟢" : "⚪");
+            const shap_info = feat.shap_value ? ` (${feat.shap_value.toFixed(4)})` : "";
+            topFeaturesHtml += `
+                    <div class="feature-item">
+                        <div class="feature-name">${idx + 1}. ${escapeHtml(feat.name)}</div>
+                        <div class="feature-details">${impactEmoji} ${feat.impact} | ${escapeHtml(feat.reason)}${shap_info}</div>
+                    </div>
+            `;
+        });
+        topFeaturesHtml += `
+                </div>
+            </div>
+        `;
+    }
 
     resultDiv.innerHTML = `
         <div class="result ${resultClass}">
@@ -91,18 +117,14 @@ function displayEnhancedResult(result, url) {
                 <div class="mini-card"><span>Rule</span><b>score &lt; ${threshold.toFixed(2)} = BENIGN, score ≥ ${threshold.toFixed(2)} = PHISHING</b></div>
                 <div class="mini-card"><span>Benign Range (0.00-${threshold.toFixed(2)})</span><b>${benignRangeText}</b></div>
                 <div class="mini-card"><span>Phishing Range (${threshold.toFixed(2)}-1.00)</span><b>${phishingRangeText}</b></div>
-                <div class="mini-card"><span>Zone</span><b>${zoneText}</b></div>
                 <div class="mini-card explanation-card">
                     <span>Explanation</span>
-                    <b style="display:block; white-space:pre-wrap; text-align:left; font-weight:600;">
-                        ${(result.explanation && String(result.explanation).trim() ? result.explanation : "-")}
+                    <b style="display:block; white-space:normal; text-align:justify; text-align-last:left; font-weight:600; word-break:break-word; line-height:1.6;">
+${(result.explanation && String(result.explanation).trim() ? result.explanation : "-")}
                     </b>
                 </div>
+                ${topFeaturesHtml}
             </div>
-
-            <div class="url-box">
-                <span>URL</span>
-                <code>${escapeHtml(url || result.url || "")}</code>
             </div>
         </div>
     `;

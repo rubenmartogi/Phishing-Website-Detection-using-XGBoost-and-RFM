@@ -366,31 +366,6 @@ body {
 .meter-fill.safe       { background: linear-gradient(90deg, #00c853, #64dd17); }
 
 /* =========================
-   URL BOX
-   ========================= */
-.url-box {
-    margin-top: 12px;
-    border: 1px dashed rgba(255, 255, 255, 0.35);
-    border-radius: 10px;
-    padding: 10px 12px;
-    background: rgba(255, 255, 255, 0.08);
-}
-
-.url-box span {
-    display: block;
-    font-size: 12px;
-    opacity: 0.85;
-    margin-bottom: 6px;
-}
-
-.url-box code {
-    display: block;
-    white-space: normal;
-    word-break: break-all;
-    font-size: 12px;
-}
-
-/* =========================
    TEST SECTION
    ========================= */
 .test-section {
@@ -471,6 +446,60 @@ body {
 
 .url-example:active {
     transform: translateX(5px);
+}
+
+/* =========================
+   EXPLANATION CARD (JUSTIFIED TEXT)
+   ========================= */
+.explanation-card {
+    grid-column: 1 / -1;
+}
+
+.explanation-card b {
+    display: block;
+    text-align: justify;
+    text-align-last: left;
+    text-indent: -2.0em;
+    padding-left: 2.5em;
+    padding-right: 1.0em;
+    line-height: 1.7;
+    margin: 0;
+    padding-bottom: 0;
+}
+
+/* =========================
+   TOP FEATURES CARD
+   ========================= */
+.features-card {
+    grid-column: 1 / -1;
+}
+
+.features-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.feature-item {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 8px;
+    border-radius: 8px;
+    border-left: 3px solid rgba(255, 255, 255, 0.3);
+}
+
+.feature-name {
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 2px;
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.feature-details {
+    font-size: 11px;
+    opacity: 0.8;
+    word-break: break-word;
+    line-height: 1.4;
 }
 
 /* =========================
