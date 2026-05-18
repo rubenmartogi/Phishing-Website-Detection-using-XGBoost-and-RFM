@@ -78,72 +78,6 @@ to the prediction and why the URL was classified as PHISHING or BENIGN.
 ================================================================================
 """
 
-"""
-================================================================================
-PHISHING WEBSITE DETECTION - AI MODEL EXPLANATION SYSTEM
-================================================================================
-
-This application provides transparent, interpretable explanations for phishing
-detection predictions using multiple AI models (Random Forest, XGBoost, Stacking).
-
-EXPLANATION FEATURES:
-- Final Prediction: PHISHING or BENIGN classification
-- Confidence Score: Probability/certainty of prediction (0-100%)
-- Main Contributing Model: Which AI model influenced the decision
-- Top Influential Features: URL characteristics that impacted the decision
-- Feature Impact Direction: Whether each feature indicates PHISHING or BENIGN
-- Model Contribution Probability: Individual scores from RF, XGB, Stacking
-- AI Reasoning: Human-readable explanation of the classification
-
-API RESPONSE STRUCTURE:
-{
-    "final_label": 0|1,
-    "final_phishing_prob": 0.0-1.0,
-    "confidence": 0.0-1.0,
-    "explanation": "Simple text explanation",
-    "explanation_detailed": {
-        "final_prediction": "PHISHING|BENIGN",
-        "confidence_score": 0.0-1.0,
-        "main_contributing_model": "Model name",
-        "top_influential_features": [
-            {
-                "name": "feature_name",
-                "value": numeric_value,
-                "impact": "PHISHING|BENIGN|NEUTRAL",
-                "reason": "Explanation of why this matters"
-            }
-        ],
-        "model_contribution_probability": {
-            "Random Forest": 0.0-1.0,
-            "XGBoost": 0.0-1.0,
-            "Logistic Regression (Stacking)": 0.0-1.0
-        },
-        "ai_reasoning": "Detailed explanation of the classification decision"
-    }
-}
-
-FEATURE IMPACT CATEGORIES:
-🔴 PHISHING - Features that increase phishing likelihood
-   Examples: IP address usage, @ symbol, suspicious TLD, unusual domain entropy
-   
-🟢 BENIGN - Features that indicate legitimate website
-   Examples: WWW prefix, HTTPS protocol, standard domain structure
-   
-⚪ NEUTRAL - Features with minimal predictive impact
-
-EXAMPLE USAGE:
-POST /predict
-{
-    "url": "https://suspicious-bank-login.xyz/verify?account=12345",
-    "debug": true
-}
-
-Response will include detailed explanation showing which features contributed
-to the prediction and why the URL was classified as PHISHING or BENIGN.
-
-================================================================================
-"""
-
 def explain_prediction(model, X_row, feature_names, top_n=3, background=None):
     import shap
     import numpy as np
@@ -187,280 +121,6 @@ def explain_prediction(model, X_row, feature_names, top_n=3, background=None):
             return top, f"(KernelExplainer) {', '.join(f'{k} ({v:.3f})' for k,v in top)}"
         except Exception as e_kernel:
             return [], f"Penjelasan otomatis gagal: {str(e_kernel)}"
-
-def get_phishing_risk_direction(feature_name, feature_value):
-    """
-    Tentukan apakah fitur mengarah ke PHISHING atau BENIGN berdasarkan karakteristik URL
-    """
-    phishing_indicators = {
-        "ip": (lambda v: v == 1, "PHISHING", "IP address digunakan di URL"),
-        "nb_at": (lambda v: v >= 1, "PHISHING", "@ symbol dalam URL"),
-        "nb_underscore": (lambda v: v > 3, "PHISHING", "Banyak underscore dalam URL"),
-        "nb_percent": (lambda v: v > 5, "PHISHING", "Banyak % symbol dalam URL"),
-        "nb_tilde": (lambda v: v >= 1, "PHISHING", "~ symbol dalam URL"),
-        "nb_semicolumn": (lambda v: v >= 1, "PHISHING", "; symbol dalam URL"),
-        "nb_star": (lambda v: v >= 1, "PHISHING", "* symbol dalam URL"),
-        "nb_comma": (lambda v: v >= 1, "PHISHING", ", symbol dalam URL"),
-        "ratio_digits_url": (lambda v: v > 0.3, "PHISHING", "Banyak angka dalam URL"),
-        "nb_subdomains": (lambda v: v > 3, "PHISHING", "Banyak subdomain dalam URL"),
-        "random_domain": (lambda v: v == 1, "PHISHING", "Domain terlihat random/tidak punya pola"),
-        "prefix_suffix": (lambda v: v == 1, "PHISHING", "Hyphen dalam nama domain"),
-        "shortening_service": (lambda v: v == 1, "PHISHING", "Menggunakan URL shortener"),
-        "suspicious_tld": (lambda v: v == 1, "PHISHING", "TLD mencurigakan"),
-        "length_hostname": (lambda v: v > 30, "PHISHING", "Hostname terlalu panjang"),
-        "nb_dot": (lambda v: v > 4, "PHISHING", "Banyak dot dalam URL"),
-        "nb_slash": (lambda v: v > 7, "PHISHING", "Banyak slash dalam URL"),
-        "nb_qm": (lambda v: v > 2, "PHISHING", "Banyak query parameter"),
-        "nb_and": (lambda v: v > 3, "PHISHING", "Banyak & dalam URL"),
-        "nb_hyphens": (lambda v: v > 3, "PHISHING", "Banyak hyphen dalam URL"),
-        "http_in_path": (lambda v: v == 1, "PHISHING", "HTTP protocol dalam path"),
-        "port": (lambda v: v == 1, "PHISHING", "Port tidak standard"),
-        "nb_dollar": (lambda v: v >= 1, "PHISHING", "$ symbol dalam URL"),
-        "nb_colon": (lambda v: v > 1, "PHISHING", "Banyak colon dalam URL"),
-        "nb_redirection": (lambda v: v > 0, "PHISHING", "Multiple redirection dalam URL"),
-        "length_url": (lambda v: v > 75, "PHISHING", "URL terlalu panjang"),
-        "phish_hints": (lambda v: v > 0, "PHISHING", "Mengandung hint phishing (login, verify, etc)"),
-        "domain_in_brand": (lambda v: v == 1, "BENIGN", "Domain termasuk brand terkenal"),
-        "brand_in_subdomain": (lambda v: v == 1, "BENIGN", "Brand terkenal di subdomain"),
-        "https_token": (lambda v: v == 0, "BENIGN", "Tidak ada HTTPS token tersembunyi"),
-        "nb_www": (lambda v: v == 1, "BENIGN", "WWW prefix dalam domain"),
-    }
-    
-    benign_indicators = {
-        "https_token": (lambda v: v == 0, "BENIGN", "HTTPS tidak ada di path"),
-        "nb_www": (lambda v: v == 1, "BENIGN", "Memiliki WWW prefix"),
-        "length_url": (lambda v: v < 50, "BENIGN", "URL length normal"),
-    }
-    
-    # Check phishing indicators
-    if feature_name in phishing_indicators:
-        check_fn, direction, reason = phishing_indicators[feature_name]
-        if check_fn(feature_value):
-            return direction, reason
-    
-    # Default untuk fitur yang menunjukkan BENIGN
-    if feature_value == 0:
-        if feature_name in ["ip", "nb_at", "suspicious_tld", "port", "shortening_service", "random_domain"]:
-            return "BENIGN", f"{feature_name} = 0 (tidak ada indikator phishing)"
-    
-    return "NEUTRAL", "Tidak ada dampak signifikan"
-
-def generate_comprehensive_explanation(
-    url, feature_values, feature_names,
-    rf_prob, xgb_prob, stack_prob,
-    decision_source, rule_detail=None, risk_score=None, rule_flag=None,
-    rf_model=None, xgb_model=None, final_label=None
-):
-    """
-    Generate comprehensive explanation untuk URL prediction
-    Fokus pada BENIGN Range (0.00-0.60) dengan SHAP feature importance
-    
-    Args:
-        url: URL yang dianalisis
-        feature_values: Dict atau list feature values
-        feature_names: List nama feature
-        rf_prob, xgb_prob, stack_prob: Probability dari masing-masing model
-        decision_source: Sumber keputusan
-        rule_detail: Detail dari rule-based evaluation
-        risk_score: Risk score dari rule-based
-        rule_flag: Rule flag dari rule-based
-        rf_model: Random Forest model untuk SHAP
-        xgb_model: XGBoost model untuk SHAP
-        final_label: Final label (0=BENIGN, 1=PHISHING) - digunakan untuk override prediction jika ada
-    
-    Returns:
-        Dict dengan explanation lengkap (fokus BENIGN range)
-    """
-    
-    # Normalize feature values ke dict jika list
-    if isinstance(feature_values, list):
-        feat_dict = {name: val for name, val in zip(feature_names, feature_values)}
-        feat_array = np.array([feature_values], dtype=float)
-    else:
-        feat_dict = feature_values
-        feat_array = np.array([[feature_values.get(n, 0) for n in feature_names]], dtype=float)
-    
-    # Determine final prediction
-    final_phishing_prob = stack_prob if stack_prob is not None else \
-                         (0.5 * rf_prob + 0.5 * xgb_prob) if rf_prob and xgb_prob else \
-                         (rf_prob or xgb_prob or 0)
-    
-    # FOKUS: BENIGN Range (0.00 - 0.60)
-    # Jika final_label diberikan (dari build_response), gunakan itu untuk override prediction
-    if final_label is not None:
-        final_prediction = "PHISHING" if final_label == 1 else "BENIGN"
-        # Jika decision dari rule-based prefilter, gunakan risk_score sebagai probability
-        if final_label == 1 and decision_source == "rule_based_prefilter_phishing" and risk_score is not None:
-            final_phishing_prob = clamp01(risk_score / 10.0)
-    else:
-        final_prediction = "BENIGN" if final_phishing_prob < 0.6 else "PHISHING"
-    
-    confidence = 1.0 - final_phishing_prob if final_prediction == "BENIGN" else final_phishing_prob
-    confidence = max(0.0, min(1.0, confidence))
-    
-    # Determine dominant model
-    probs = {}
-    if rf_prob is not None:
-        probs["Random Forest"] = rf_prob
-    if xgb_prob is not None:
-        probs["XGBoost"] = xgb_prob
-    if stack_prob is not None:
-        probs["Logistic Regression (Stacking)"] = stack_prob
-    
-    if decision_source == "rule_based_prefilter_phishing":
-        dominant_model = "Rule-Based Detection"
-    else:
-        dominant_model = max(probs, key=probs.get) if probs else "Unknown"
-    
-    # ========== GET TOP INFLUENTIAL FEATURES USING SHAP ==========
-    top_features = []
-    shap_explanation = ""
-    
-    # Coba gunakan SHAP untuk menjelaskan fitur (untuk BENIGN dan PHISHING)
-    if rf_model is not None:
-        try:
-            # Gunakan Random Forest untuk SHAP explanation
-            shap_top, shap_explanation = explain_prediction(
-                rf_model, 
-                feat_array, 
-                feature_names,
-                top_n=5
-            )
-            
-            for feat_name, shap_value in shap_top:
-                if feat_name in feat_dict:
-                    feat_value = feat_dict[feat_name]
-                    direction, reason = get_phishing_risk_direction(feat_name, feat_value)
-                    top_features.append({
-                        "name": feat_name,
-                        "value": feat_value,
-                        "impact": direction,
-                        "reason": reason,
-                        "shap_value": float(shap_value)
-                    })
-        except Exception as e:
-            print(f"[DEBUG] SHAP explanation failed: {str(e)}")
-            shap_explanation = ""
-    
-    # Fallback ke rule-based feature selection jika SHAP gagal
-    if not top_features:
-        priority_features = [
-            "ip", "nb_at", "suspicious_tld", "prefix_suffix", "random_domain",
-            "shortening_service", "nb_percent", "nb_underscore", "nb_tilde",
-            "nb_semicolumn", "ratio_digits_url", "nb_subdomains", "port",
-            "http_in_path", "nb_slash", "nb_qm", "nb_and", "nb_hyphens"
-        ]
-        
-        for feat_name in priority_features:
-            if feat_name in feat_dict:
-                feat_value = feat_dict[feat_name]
-                direction, reason = get_phishing_risk_direction(feat_name, feat_value)
-                if direction != "NEUTRAL":
-                    top_features.append({
-                        "name": feat_name,
-                        "value": feat_value,
-                        "impact": direction,
-                        "reason": reason
-                    })
-        
-        top_features = top_features[:5]
-    
-    # Count indicators
-    phishing_count = sum(1 for f in top_features if f["impact"] == "PHISHING")
-    benign_count = sum(1 for f in top_features if f["impact"] == "BENIGN")
-    
-    # ========== GENERATE REASONING (FOKUS BENIGN) ==========
-    # Ensure consistent rounding for all probability displays
-    phishing_prob_display = round(final_phishing_prob, 4)
-    benign_prob_display = round(1.0 - final_phishing_prob, 4)
-    
-    if final_prediction == "BENIGN":
-        if final_phishing_prob < 0.6:
-            reasoning = f"🟢 URL terdeteksi sebagai BENIGN dengan phishing probability {phishing_prob_display:.2%} "
-            reasoning += f"(BENIGN Range: 0.00-0.60). "
-            reasoning += f"Benign Confidence: {benign_prob_display:.2%}. "
-            
-            if shap_explanation:
-                reasoning += f"Top features: {shap_explanation}. "
-            
-            if benign_count > 0:
-                reasoning += f"{benign_count} fitur utama menunjukkan karakteristik website legitimate. "
-            
-            reasoning += "Website ini AMAN untuk dikunjungi."
-        else:
-            reasoning = f"URL dikategorikan sebagai BENIGN (phishing probability: {phishing_prob_display:.2%})."
-    else:
-        # Untuk PHISHING
-        reasoning = f"🔴 URL terdeteksi sebagai PHISHING dengan phishing probability {phishing_prob_display:.2%} "
-        reasoning += f"(PHISHING Range: 0.60-1.00). "
-        
-        if shap_explanation:
-            reasoning += f"Top features: {shap_explanation}. "
-        
-        if phishing_count > 0:
-            reasoning += f"{phishing_count} fitur utama menunjukkan indikator phishing berbahaya. "
-        
-        reasoning += "Website ini TIDAK AMAN untuk dikunjungi."
-    
-    explanation = {
-        "final_prediction": final_prediction,
-        "confidence_score": confidence,
-        "phishing_probability": final_phishing_prob,
-        "benign_probability": 1.0 - final_phishing_prob,
-        "main_contributing_model": dominant_model,
-        "top_influential_features": top_features,
-        "model_contribution_probability": probs,
-        "phishing_indicators_count": phishing_count,
-        "benign_indicators_count": benign_count,
-        "ai_reasoning": reasoning,
-        "shap_explanation": shap_explanation,
-        "detailed_explanation": format_explanation_text(
-            final_prediction, confidence, dominant_model, top_features, probs, reasoning
-        )
-    }
-    
-    return explanation
-
-def format_explanation_text(final_prediction, confidence, main_model, top_features, probabilities, reasoning):
-    """
-    Format explanation ke dalam text yang rapi dan informatif
-    Fokus BENIGN Range (0.00-0.60) + SHAP Feature Importance
-    """
-    text = f"""
-═══════════════════════════════════════════════════════════════
-📋 AI MODEL EXPLANATION - PHISHING WEBSITE DETECTION (BENIGN FOCUS)
-═══════════════════════════════════════════════════════════════
-
-🎯 FINAL PREDICTION
-   Status: {'🟢 BENIGN (SAFE)' if final_prediction == 'BENIGN' else '🔴 PHISHING (DANGEROUS)'}
-   Classification Confidence: {confidence:.2%}
-   Prediction Range: {'0.00-0.60 (BENIGN)' if final_prediction == 'BENIGN' else '>0.60 (PHISHING)'}
-
-🔍 DECISION ANALYSIS
-   Main Contributing Model: {main_model}
-   
-⭐ TOP INFLUENTIAL FEATURES (Based on SHAP)
-"""
-    for i, feat in enumerate(top_features, 1):
-        direction_emoji = "🔴" if feat["impact"] == "PHISHING" else "🟢"
-        shap_val = feat.get("shap_value", None)
-        shap_info = f" (SHAP: {shap_val:.4f})" if shap_val is not None else ""
-        
-        text += f"\n   {i}. {feat['name']} = {feat['value']}{shap_info}"
-        text += f"\n      {direction_emoji} Impact: {feat['impact']}"
-        text += f"\n      📌 Reason: {feat['reason']}"
-    
-    text += "\n\n📊 MODEL CONTRIBUTION PROBABILITY\n"
-    for model_name, prob in probabilities.items():
-        text += f"   • {model_name}: {prob:.2%} (Phishing)\n"
-    
-    text += f"\n💡 AI REASONING\n   {reasoning}\n"
-    text += "\n📌 EXPLANATION FOCUS: BENIGN Range (0.00-0.60)\n"
-    text += "   URLs with phishing probability < 0.60 are classified as BENIGN (SAFE)\n"
-    text += "   This explanation emphasizes features supporting the BENIGN classification.\n"
-    text += "\n═══════════════════════════════════════════════════════════════\n"
-    
-    return text
 
 def get_phishing_risk_direction(feature_name, feature_value):
     """
@@ -1401,15 +1061,11 @@ def predict():
         web_used=None,
         rf_model=None,
         xgb_model=None,
-        rf_model=None,
-        xgb_model=None,
     ):
         p_phish = clamp01(final_phishing_prob)
         p_safe = clamp01(1.0 - p_phish)
         final_label = 1 if p_phish >= 0.6 else 0
         category = "phishing" if final_label == 1 else "benign"
-        
-        # Ensure consistent confidence display
         
         # Ensure consistent confidence display
         confidence = p_phish if final_label == 1 else p_safe
@@ -1484,85 +1140,11 @@ def predict():
             top_features = [f["name"] for f in explanation_dict["top_influential_features"][:3]]
         
         explanation_str = explanation_dict.get("ai_reasoning", "Penjelasan tidak tersedia.")
-        confidence = round(confidence, 4)
-        
-        # ========== GENERATE COMPREHENSIVE EXPLANATION ==========
-        try:
-            comprehensive_exp = generate_comprehensive_explanation(
-                url=url,
-                feature_values=feats_full,
-                feature_names=cols,
-                rf_prob=rf_prob,
-                xgb_prob=xgb_prob,
-                stack_prob=stack_prob,
-                decision_source=decision_source,
-                rule_detail=rule_detail,
-                risk_score=risk_score,
-                rule_flag=rule_flag,
-                rf_model=rf_model,
-                xgb_model=xgb_model,
-                final_label=final_label
-            )
-            
-            # Format explanation untuk API response
-            explanation_dict = {
-                "final_prediction": comprehensive_exp["final_prediction"],
-                "confidence_score": round(comprehensive_exp["confidence_score"], 4),
-                "phishing_probability": round(comprehensive_exp["phishing_probability"], 4),
-                "benign_probability": round(comprehensive_exp["benign_probability"], 4),
-                "main_contributing_model": comprehensive_exp["main_contributing_model"],
-                "top_influential_features": [
-                    {
-                        "name": f["name"],
-                        "value": f["value"],
-                        "impact": f["impact"],
-                        "reason": f["reason"],
-                        "shap_value": f.get("shap_value", None)
-                    }
-                    for f in comprehensive_exp["top_influential_features"]
-                ],
-                "model_contribution_probability": {
-                    str(k): round(v, 4) for k, v in comprehensive_exp["model_contribution_probability"].items()
-                },
-                "phishing_indicators_count": comprehensive_exp["phishing_indicators_count"],
-                "benign_indicators_count": comprehensive_exp["benign_indicators_count"],
-                "ai_reasoning": comprehensive_exp["ai_reasoning"],
-                "shap_explanation": comprehensive_exp.get("shap_explanation", ""),
-                "detailed_explanation": comprehensive_exp["detailed_explanation"]
-            }
-        except Exception as e:
-            print(f"[WARNING] Error generating comprehensive explanation: {str(e)}")
-            explanation_dict = {
-                "final_prediction": "PHISHING" if final_label == 1 else "BENIGN",
-                "confidence_score": confidence,
-                "phishing_probability": round(p_phish, 4),
-                "benign_probability": round(p_safe, 4),
-                "main_contributing_model": model_name,
-                "top_influential_features": [],
-                "model_contribution_probability": {
-                    "Random Forest": round(rf_prob, 4) if rf_prob else 0.0,
-                    "XGBoost": round(xgb_prob, 4) if xgb_prob else 0.0,
-                    "Logistic Regression (Stacking)": round(stack_prob, 4) if stack_prob else 0.0
-                },
-                "ai_reasoning": "Penjelasan detail tidak tersedia.",
-                "shap_explanation": "",
-                "detailed_explanation": ""
-            }
-        
-        # Simple explanation for backward compatibility
-        top_features = []
-        if explanation_dict.get("top_influential_features"):
-            top_features = [f["name"] for f in explanation_dict["top_influential_features"][:3]]
-        
-        explanation_str = explanation_dict.get("ai_reasoning", "Penjelasan tidak tersedia.")
         if not explanation_str:
             explanation_str = "Penjelasan tidak tersedia."
         
-        
         resp = {
             "final_label": final_label,
-            "final_phishing_prob": round(p_phish, 4),
-            "final_safe_prob": round(p_safe, 4),
             "final_phishing_prob": round(p_phish, 4),
             "final_safe_prob": round(p_safe, 4),
             "final_threshold": 0.6,
@@ -1576,14 +1158,10 @@ def predict():
             "rf_prob": round(rf_prob, 4) if rf_prob else None,
             "xgb_prob": round(xgb_prob, 4) if xgb_prob else None,
             "stack_prob": round(stack_prob, 4) if stack_prob else None,
-            "rf_prob": round(rf_prob, 4) if rf_prob else None,
-            "xgb_prob": round(xgb_prob, 4) if xgb_prob else None,
-            "stack_prob": round(stack_prob, 4) if stack_prob else None,
             "label": category,
             "category": category,
             "confidence": confidence,
         }
-        
         
         if debug:
             resp["debug"] = {
@@ -1594,7 +1172,6 @@ def predict():
                 "risk_score": risk_score,
                 "risk_category": risk_category,
                 "rule_detail": rule_detail,
-                "features_analyzed": len(cols),
                 "features_analyzed": len(cols),
             }
         
@@ -1637,9 +1214,6 @@ def predict():
             stack_prob=None,
             rf_model=rf,
             xgb_model=None
-            stack_prob=None,
-            rf_model=rf,
-            xgb_model=None
         )
 
     # MODE 2: XGB ONLY
@@ -1659,9 +1233,6 @@ def predict():
             model_name="XGBoost",
             rf_prob=None,
             xgb_prob=preds.get("xgb_prob"),
-            stack_prob=None,
-            rf_model=None,
-            xgb_model=xgb
             stack_prob=None,
             rf_model=None,
             xgb_model=xgb
@@ -1696,9 +1267,6 @@ def predict():
             stack_prob=preds.get("stack_prob"),
             rf_model=rf,
             xgb_model=xgb
-            stack_prob=preds.get("stack_prob"),
-            rf_model=rf,
-            xgb_model=xgb
         )
 
     # MODE 4: HYBRID PREFILTER
@@ -1708,9 +1276,6 @@ def predict():
             final_phishing_prob=p,
             decision_source="rule_based_prefilter_phishing",
             model_name="Rule-Based Prefilter",
-            web_used=False,
-            rf_model=None,
-            xgb_model=None
             web_used=False,
             rf_model=None,
             xgb_model=None
@@ -1741,9 +1306,6 @@ def predict():
         model_name=model_name,
         rf_prob=preds.get("rf_prob"),
         xgb_prob=preds.get("xgb_prob"),
-        stack_prob=preds.get("stack_prob"),
-        rf_model=rf,
-        xgb_model=xgb
         stack_prob=preds.get("stack_prob"),
         rf_model=rf,
         xgb_model=xgb
