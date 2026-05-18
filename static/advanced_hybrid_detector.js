@@ -106,6 +106,31 @@ function displayEnhancedResult(result, url) {
         `;
     }
 
+    // Hitung probabilitas
+    const phishingProb = score;
+    const benignProb = 1 - score;
+
+    const meterHtml = `
+        <div class="meter-box">
+            <div class="meter-label">
+                <span>Phishing Probability</span>
+                <span>${phishingProb.toFixed(2)}</span>
+            </div>
+            <div class="meter-track">
+                <div class="meter-fill phishing" style="width: ${(phishingProb * 100).toFixed(2)}%"></div>
+            </div>
+        </div>
+        <div class="meter-box">
+            <div class="meter-label">
+                <span>Benign Probability</span>
+                <span>${benignProb.toFixed(2)}</span>
+            </div>
+            <div class="meter-track">
+                <div class="meter-fill safe" style="width: ${(benignProb * 100).toFixed(2)}%"></div>
+            </div>
+        </div>
+    `;
+
     resultDiv.innerHTML = `
         <div class="result ${resultClass}">
             <div class="result-title">${escapeHtml(result.result)}</div>
@@ -115,14 +140,7 @@ function displayEnhancedResult(result, url) {
                 <div class="mini-card"><span>Decision Mode</span><b>${escapeHtml(result.decisionMode)}</b></div>
                 <div class="mini-card"><span>Decision Source</span><b>${escapeHtml(result.decisionSource)}</b></div>
                 <div class="mini-card"><span>Rule</span><b>score &lt; ${threshold.toFixed(2)} = BENIGN, score ≥ ${threshold.toFixed(2)} = PHISHING</b></div>
-                <div class="mini-card"><span>Benign Range (0.00-${threshold.toFixed(2)})</span><b>${benignRangeText}</b></div>
-                <div class="mini-card"><span>Phishing Range (${threshold.toFixed(2)}-1.00)</span><b>${phishingRangeText}</b></div>
-                <div class="mini-card explanation-card">
-                    <span>Explanation</span>
-                    <b style="display:block; white-space:normal; text-align:justify; text-align-last:left; font-weight:600; word-break:break-word; line-height:1.6;">
-${(result.explanation && String(result.explanation).trim() ? result.explanation : "-")}
-                    </b>
-                </div>
+                ${meterHtml}
                 ${topFeaturesHtml}
             </div>
             </div>
