@@ -159,3 +159,7 @@ Notebook `proses.ipynb` menyediakan:
 
 ## Lisensi
 Untuk keperluan akademik dan penelitian keamanan siber.
+
+<div class="mini-card"><span>Decision Mode</span><b>${escapeHtml(result.decisionMode)}</b></div>
+                <div class="mini-card"><span>Decision Source</span><b>${escapeHtml(result.decisionSource)}</b></div>
+                <div class="mini-card"><span>Rule</span><b>score &lt; ${threshold.toFixed(2)} = BENIGN, score ≥ ${threshold.toFixed(2)} = PHISHING</b></div>

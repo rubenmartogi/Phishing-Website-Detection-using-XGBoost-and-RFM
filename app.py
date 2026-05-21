@@ -1,3 +1,4 @@
+from llm_utils import get_llm_reasoning
 import math
 import ipaddress
 import pickle
@@ -466,11 +467,13 @@ def log_feature_extraction(url, mode, feats, feature_columns_81, status):
     # Tambahkan fitur (81 kolom)
     for feat in feature_columns_81:
         row[feat] = feats.get(feat, 0.0)
-    # Tambahkan kolom explanation dan top_features di belakang
+    # Tambahkan kolom explanation, top_features, dan LLM_REASONING di belakang
     explanation = feats.get("_explanation", "")
     top_features = feats.get("_top_features", "")
+    llm_reasoning = feats.get("_llm_reasoning", "")
     row["EXPLANATION"] = explanation
     row["TOP_FEATURES"] = top_features
+    row["LLM_REASONING"] = llm_reasoning
     # Tidak perlu kolom waktu (TIMED) lagi
     row_df = pd.DataFrame([row])
     if df is None:
@@ -1162,6 +1165,12 @@ def predict():
             "category": category,
             "confidence": confidence,
         }
+        # Tambahkan reasoning LLM ke response
+        try:
+            prompt_llm = f"Jelaskan mengapa URL berikut diklasifikasikan sebagai {'phishing' if final_label == 1 else 'benign'}: {url}"
+            resp["llm_reasoning"] = get_llm_reasoning(prompt_llm)
+        except Exception as e:
+            resp["llm_reasoning"] = f"LLM error: {str(e)}"
         
         if debug:
             resp["debug"] = {
@@ -1190,6 +1199,7 @@ def predict():
         feats_for_log = dict(feats_full)
         feats_for_log["_explanation"] = log_explanation
         feats_for_log["_top_features"] = log_top_features
+        feats_for_log["_llm_reasoning"] = resp.get("llm_reasoning", "")
         log_feature_extraction(url, mode, feats_for_log, FEATURE_COLUMNS_81, category)
         
         return jsonify(resp)

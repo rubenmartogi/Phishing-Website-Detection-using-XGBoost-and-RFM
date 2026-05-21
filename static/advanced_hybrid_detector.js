@@ -56,7 +56,7 @@ function backendToEnhancedResult(data, url) {
         decisionScore: pPhish,
         final_threshold: threshold,
         url,
-        explanation: data.explanation || "-",
+        explanation: data.llm_reasoning || "-",
         topFeatures: topFeatures
     };
 }
@@ -106,44 +106,37 @@ function displayEnhancedResult(result, url) {
         `;
     }
 
-    // Hitung probabilitas
-    const phishingProb = score;
-    const benignProb = 1 - score;
+    const phishingProb = score; // 0-1
 
-    const meterHtml = `
-        <div class="meter-box">
-            <div class="meter-label">
-                <span>Phishing Probability</span>
-                <span>${phishingProb.toFixed(2)}</span>
-            </div>
-            <div class="meter-track">
-                <div class="meter-fill phishing" style="width: ${(phishingProb * 100).toFixed(2)}%"></div>
-            </div>
+    const riskBarHtml = `
+    <div class="risk-bar-container">
+        <div class="risk-bar-labels">
+        <span class="risk-label-left">Benign</span>
+        <span class="risk-label-right">Phishing</span>
         </div>
-        <div class="meter-box">
-            <div class="meter-label">
-                <span>Benign Probability</span>
-                <span>${benignProb.toFixed(2)}</span>
-            </div>
-            <div class="meter-track">
-                <div class="meter-fill safe" style="width: ${(benignProb * 100).toFixed(2)}%"></div>
-            </div>
+        <div class="risk-bar-track">
+        <div class="risk-bar-gradient"></div>
+        <div class="risk-bar-marker" style="left: ${(phishingProb * 100).toFixed(1)}%"></div>
         </div>
+        <div class="risk-bar-score">
+        Phishing Score: <b>${phishingProb.toFixed(2)}</b>
+        </div>
+    </div>
     `;
 
     resultDiv.innerHTML = `
         <div class="result ${resultClass}">
             <div class="result-title">${escapeHtml(result.result)}</div>
-
             <div class="mini-grid">
                 <div class="mini-card"><span>Model</span><b>${escapeHtml(result.algorithm)}</b></div>
-                <div class="mini-card"><span>Decision Mode</span><b>${escapeHtml(result.decisionMode)}</b></div>
-                <div class="mini-card"><span>Decision Source</span><b>${escapeHtml(result.decisionSource)}</b></div>
                 <div class="mini-card"><span>Rule</span><b>score &lt; ${threshold.toFixed(2)} = BENIGN, score ≥ ${threshold.toFixed(2)} = PHISHING</b></div>
-                ${meterHtml}
                 ${topFeaturesHtml}
             </div>
+            <div class="mini-card ai-reasoning-card" style="margin:16px 0 8px 0;">
+                <span>AI Reasoning</span>
+                <div style="white-space:pre-line">${escapeHtml(result.explanation)}</div>
             </div>
+            ${riskBarHtml}
         </div>
     `;
 }
