@@ -1,3 +1,10 @@
+// Convert markdown bold (**text**) to HTML bold (<b>text</b>)
+function markdownToHtml(str) {
+    if (!str) return "";
+    // Replace **bold** with <b>bold</b>
+    return String(str).replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+}
+
 function clamp01(v) {
     const n = Number(v);
     if (Number.isNaN(n)) return 0;
@@ -56,7 +63,8 @@ function backendToEnhancedResult(data, url) {
         decisionScore: pPhish,
         final_threshold: threshold,
         url,
-        explanation: data.llm_reasoning || "-",
+        // Convert markdown to HTML for explanation
+        explanation: markdownToHtml(data.llm_reasoning || "-"),
         topFeatures: topFeatures
     };
 }
@@ -134,7 +142,7 @@ function displayEnhancedResult(result, url) {
             </div>
             <div class="mini-card ai-reasoning-card" style="margin:16px 0 8px 0;">
                 <span>AI Reasoning</span>
-                <div style="white-space:pre-line">${escapeHtml(result.explanation)}</div>
+                <div style="white-space:pre-line" class="ai-reasoning-html">${result.explanation}</div>
             </div>
             ${riskBarHtml}
         </div>
