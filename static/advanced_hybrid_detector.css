@@ -542,8 +542,8 @@ body {
     letter-spacing: 1px;
 }
 
-.risk-label-left { color: #00c853; }
-.risk-label-right { color: #d32f2f; }
+.risk-label-left { color: #fff !important; }
+.risk-label-right { color: #fff !important; }
 
 .risk-bar-track {
     position: relative;
@@ -612,8 +612,8 @@ body {
     letter-spacing: 1px;
 }
 
-.risk-label-left { color: #00c853; }
-.risk-label-right { color: #d32f2f; }
+.risk-label-left { color: #fff !important; }
+.risk-label-right { color: #fff !important; }
 
 .risk-bar-track {
     position: relative;

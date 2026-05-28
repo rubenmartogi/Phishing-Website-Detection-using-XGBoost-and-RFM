@@ -1437,12 +1437,11 @@ def predict():
 
             prompt_llm = (
                 f"Lakukan analisis singkat teknis (3-4 kalimat) mengapa URL berikut diklasifikasikan sebagai {category.upper()} "
-                f"dengan probabilitas phishing {p_phish:.2%}.\n\n"
+                f"dengan probabilitas phishing {p_phish:.2f}.\n\n"
                 f"URL: {url}\n"
                 f"Model utama: {model_main}\n"
                 f"Top fitur yang memberikan kontribusi:\n{log_top_features_str}\n\n"
-                "Akhiri dengan: (1) satu kalimat KESIMPULAN TEGAS berisi rekomendasi tindakan ('REKOMENDASI: BLOKIR' atau 'REKOMENDASI: IZINKAN'), "
-                "dan (2) maksimal satu kalimat pembatas metodologis singkat (mis. 'Catatan: keputusan berdasarkan model ML dan rule-based filter'). "
+                "Akhiri dengan: satu kalimat berisi rekomendasi tindakan ('REKOMENDASI: BLOKIR' atau 'REKOMENDASI: IZINKAN'),"
                 "Hindari frasa ketidakpastian yang panjang."
             )
             resp["llm_reasoning"] = get_llm_reasoning(prompt_llm)

@@ -119,8 +119,8 @@ function displayEnhancedResult(result, url) {
     const riskBarHtml = `
     <div class="risk-bar-container">
         <div class="risk-bar-labels">
-        <span class="risk-label-left">Benign</span>
-        <span class="risk-label-right">Phishing</span>
+        <span class="risk-label-left">Low Risk</span>
+        <span class="risk-label-right">Hard Risk</span>
         </div>
         <div class="risk-bar-track">
         <div class="risk-bar-gradient"></div>
