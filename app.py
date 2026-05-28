@@ -21,37 +21,104 @@ PHISHING WEBSITE DETECTION - AI MODEL EXPLANATION SYSTEM
 """
 
 
+
+def _extract_phishing_shap_vector(shap_values, class_index=1):
+    """
+    Mengambil SHAP values untuk kelas phishing dari berbagai format output SHAP.
+    Output akhir selalu berbentuk vector 1D sepanjang jumlah fitur.
+    """
+    import numpy as np
+
+    # Format lama: list berisi nilai SHAP per kelas [class_0, class_1]
+    if isinstance(shap_values, list):
+        if len(shap_values) > class_index:
+            vals = shap_values[class_index]
+        else:
+            vals = shap_values[0]
+        return np.array(vals).reshape(np.array(vals).shape[0], -1)[0]
+
+    vals = np.array(shap_values)
+
+    # Format umum: (n_samples, n_features)
+    if vals.ndim == 2:
+        return vals[0]
+
+    # Format baru multi-output: (n_samples, n_features, n_classes)
+    if vals.ndim == 3:
+        if vals.shape[-1] > class_index:
+            return vals[0, :, class_index]
+        return vals[0, :, 0]
+
+    # Fallback terakhir
+    return vals.flatten()
+
+
+def _make_shap_top_items(shap_vals, feature_names, top_n=5):
+    """
+    Membuat daftar fitur teratas berdasarkan |SHAP|,
+    tetapi tetap menyimpan signed SHAP agar arah kontribusi tidak hilang.
+    """
+    import numpy as np
+
+    shap_vals = np.array(shap_vals, dtype=float).flatten()
+    n = min(len(shap_vals), len(feature_names))
+    shap_vals = shap_vals[:n]
+    feature_names = list(feature_names)[:n]
+
+    top_idx = np.argsort(np.abs(shap_vals))[::-1][:top_n]
+    top_items = []
+
+    for i in top_idx:
+        signed_value = float(shap_vals[i])
+        top_items.append(
+            {
+                "name": feature_names[i],
+                "shap_value_signed": signed_value,
+                "abs_shap": float(abs(signed_value)),
+                "shap_direction": (
+                    "PHISHING"
+                    if signed_value > 0
+                    else "BENIGN"
+                    if signed_value < 0
+                    else "NEUTRAL"
+                ),
+            }
+        )
+    return top_items
+
+
 def explain_prediction(model, X_row, feature_names, top_n=3, background=None):
     import numpy as np
     import shap
 
+    arr = X_row.values if hasattr(X_row, "values") else np.array(X_row)
+
     try:
+        # Cocok untuk Random Forest dan XGBoost karena keduanya tree-based model.
         explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(X_row)
-        if isinstance(shap_values, list) and len(shap_values) == 2:
-            shap_vals = np.array(shap_values[1]).flatten()
-        elif isinstance(shap_values, list):
-            shap_vals = np.array(shap_values[0]).flatten()
-        else:
-            shap_vals = np.array(shap_values).flatten()
-        top = sorted(
-            zip(feature_names, np.abs(shap_vals)), key=lambda x: x[1], reverse=True
-        )[:top_n]
-        return top, f"{', '.join(f'{k} ({v:.3f})' for k, v in top)}"
+        shap_values = explainer.shap_values(arr)
+        shap_vals = _extract_phishing_shap_vector(shap_values, class_index=1)
+        top = _make_shap_top_items(shap_vals, feature_names, top_n=top_n)
+
+        explanation = ", ".join(
+            f"{item['name']} ({item['shap_value_signed']:.4f}; arah={item['shap_direction']})"
+            for item in top
+        )
+        return top, explanation
+
     except Exception as e_tree:
         try:
             arr = X_row.values if hasattr(X_row, "values") else np.array(X_row)
             num_features = arr.shape[1]
 
-            # SOLUSI: Pemisalan background data yang bervariasi (tidak nol semua)
+            # Background manual ini hanya fallback agar KernelExplainer tetap berjalan.
+            # Untuk analisis final, background lebih baik diambil dari data training/validasi.
             if background is None:
                 if num_features == 2:
-                    # [rf_prob, xgb_prob]
                     background = np.array(
                         [[0.0, 0.0], [1.0, 1.0], [0.5, 0.5], [0.1, 0.1], [0.9, 0.9]]
                     )
                 elif num_features == 3:
-                    # [rf_prob, xgb_prob, rule_flag]
                     background = np.array(
                         [
                             [0.0, 0.0, 0],
@@ -62,7 +129,6 @@ def explain_prediction(model, X_row, feature_names, top_n=3, background=None):
                         ]
                     )
                 else:
-                    # [rf_prob, xgb_prob, rule_flag, risk_score]
                     background = np.array(
                         [
                             [0.0, 0.0, 0, 0.0],
@@ -76,22 +142,21 @@ def explain_prediction(model, X_row, feature_names, top_n=3, background=None):
                         extra_cols = num_features - background.shape[1]
                         extra = np.full((background.shape[0], extra_cols), 0.5)
                         background = np.hstack([background, extra])
+                    elif background.shape[1] > num_features:
+                        background = background[:, :num_features]
 
+            # KernelExplainer adalah fallback model-agnostic.
             explainer = shap.KernelExplainer(model.predict_proba, background)
             shap_values = explainer.shap_values(arr, nsamples=100)
-            if isinstance(shap_values, list) and len(shap_values) == 2:
-                shap_vals = np.array(shap_values[1]).flatten()
-            elif isinstance(shap_values, list):
-                shap_vals = np.array(shap_values[0]).flatten()
-            else:
-                shap_vals = np.array(shap_values).flatten()
-            top = sorted(
-                zip(feature_names, np.abs(shap_vals)), key=lambda x: x[1], reverse=True
-            )[:top_n]
-            return (
-                top,
-                f"(KernelExplainer) {', '.join(f'{k} ({v:.3f})' for k, v in top)}",
+            shap_vals = _extract_phishing_shap_vector(shap_values, class_index=1)
+            top = _make_shap_top_items(shap_vals, feature_names, top_n=top_n)
+
+            explanation = ", ".join(
+                f"{item['name']} ({item['shap_value_signed']:.4f}; arah={item['shap_direction']})"
+                for item in top
             )
+            return top, f"(KernelExplainer) {explanation}"
+
         except Exception as e_kernel:
             return [], f"Penjelasan otomatis gagal: {str(e_kernel)}"
 
@@ -326,20 +391,27 @@ def generate_comprehensive_explanation(
             shap_top, shap_explanation = explain_prediction(
                 active_model, feat_array, feature_names, top_n=5
             )
-            # Bentuk struktur top_features dari hasil SHAP
-            for feat_name, shap_value in shap_top:
+            # Bentuk struktur top_features dari hasil SHAP.
+            # impact mengikuti arah signed SHAP, bukan sekadar heuristic rule-based.
+            for item in shap_top:
+                feat_name = item["name"]
                 if feat_name in feat_dict:
                     feat_value = feat_dict.get(feat_name, 0)
-                    direction, reason = get_phishing_risk_direction(
+                    rule_direction, reason = get_phishing_risk_direction(
                         feat_name, feat_value
                     )
+                    shap_direction = item.get("shap_direction", "NEUTRAL")
                     top_features.append(
                         {
                             "name": feat_name,
                             "value": feat_value,
-                            "impact": direction,
+                            "impact": shap_direction,
+                            "rule_impact": rule_direction,
                             "reason": reason,
-                            "shap_value": float(shap_value),
+                            "shap_value": float(item["shap_value_signed"]),
+                            "shap_value_signed": float(item["shap_value_signed"]),
+                            "abs_shap": float(item["abs_shap"]),
+                            "shap_direction": shap_direction,
                         }
                     )
         except Exception as e:
@@ -356,19 +428,25 @@ def generate_comprehensive_explanation(
                 shap_top, shap_explanation = explain_prediction(
                     other_model, feat_array, feature_names, top_n=5
                 )
-                for feat_name, shap_value in shap_top:
+                for item in shap_top:
+                    feat_name = item["name"]
                     if feat_name in feat_dict:
                         feat_value = feat_dict.get(feat_name, 0)
-                        direction, reason = get_phishing_risk_direction(
+                        rule_direction, reason = get_phishing_risk_direction(
                             feat_name, feat_value
                         )
+                        shap_direction = item.get("shap_direction", "NEUTRAL")
                         top_features.append(
                             {
                                 "name": feat_name,
                                 "value": feat_value,
-                                "impact": direction,
+                                "impact": shap_direction,
+                                "rule_impact": rule_direction,
                                 "reason": reason,
-                                "shap_value": float(shap_value),
+                                "shap_value": float(item["shap_value_signed"]),
+                                "shap_value_signed": float(item["shap_value_signed"]),
+                                "abs_shap": float(item["abs_shap"]),
+                                "shap_direction": shap_direction,
                             }
                         )
                 # Jika berhasil, ubah nama model dominan yang dijelaskan
@@ -1359,6 +1437,10 @@ def predict():
                         "impact": f["impact"],
                         "reason": f["reason"],
                         "shap_value": f.get("shap_value", None),
+                        "shap_value_signed": f.get("shap_value_signed", f.get("shap_value", None)),
+                        "abs_shap": f.get("abs_shap", None),
+                        "shap_direction": f.get("shap_direction", f.get("impact", None)),
+                        "rule_impact": f.get("rule_impact", None),
                     }
                     for f in comprehensive_exp["top_influential_features"]
                 ],
@@ -1463,7 +1545,7 @@ def predict():
         log_explanation = explanation_dict.get("ai_reasoning", "")
         log_top_features = "\n".join(
             [
-                f"{i + 1}. {f['name']} | {f['impact']} | {f.get('reason', '')} ({round(f.get('shap_value', 0), 4) if f.get('shap_value') is not None else ''})"
+                f"{i + 1}. {f['name']} | SHAP arah: {f.get('shap_direction', f.get('impact'))} | signed: {round(f.get('shap_value_signed', f.get('shap_value', 0)), 4) if f.get('shap_value_signed', f.get('shap_value')) is not None else ''} | abs: {round(f.get('abs_shap', 0), 4) if f.get('abs_shap') is not None else ''} | {f.get('reason', '')}"
                 for i, f in enumerate(
                     explanation_dict.get("top_influential_features", [])
                 )
