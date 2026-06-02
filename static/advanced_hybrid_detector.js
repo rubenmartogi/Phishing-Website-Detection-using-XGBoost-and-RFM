@@ -95,16 +95,15 @@ function displayEnhancedResult(result, url) {
     if (result.topFeatures && result.topFeatures.length > 0) {
         topFeaturesHtml = `
             <div class="mini-card features-card">
-                <span>⭐ Top Influential Features</span>
+                <span>Fitur </span>
                 <div class="features-list">
         `;
         result.topFeatures.forEach((feat, idx) => {
             const impactEmoji = feat.impact === "PHISHING" ? "🔴" : (feat.impact === "BENIGN" ? "🟢" : "⚪");
-            const shap_info = feat.shap_value ? ` (${feat.shap_value.toFixed(4)})` : "";
             topFeaturesHtml += `
                     <div class="feature-item">
                         <div class="feature-name">${idx + 1}. ${escapeHtml(feat.name)}</div>
-                        <div class="feature-details">${impactEmoji} ${feat.impact} | ${escapeHtml(feat.reason)}${shap_info}</div>
+                        <div class="feature-details">${impactEmoji} ${feat.impact} | ${escapeHtml(feat.reason)}</div>
                     </div>
             `;
         });

@@ -1,4 +1,5 @@
 import ipaddress
+import json
 import math
 import os
 import pickle
@@ -19,7 +20,6 @@ from llm_utils import get_llm_reasoning
 PHISHING WEBSITE DETECTION - AI MODEL EXPLANATION SYSTEM
 ================================================================================
 """
-
 
 
 def _extract_phishing_shap_vector(shap_values, class_index=1):
@@ -87,24 +87,89 @@ def _make_shap_top_items(shap_vals, feature_names, top_n=5):
     return top_items
 
 
+def _human_label(feat_name):
+    mapping = {
+        "nb_hyperlinks": "Jumlah tautan di halaman",
+        "ratio_intHyperlinks": "Persentase tautan internal",
+        "ratio_extHyperlinks": "Persentase tautan eksternal",
+        "nb_at": "Tanda @ pada URL",
+        "random_domain": "Nama domain terlihat acak",
+        "shortening_service": "Menggunakan layanan pemendek URL",
+        "length_url": "Panjang URL",
+        "nb_subdomains": "Banyak subdomain",
+        "suspicious_tld": "TLD mencurigakan",
+        "domain_in_brand": "Domain termasuk brand terkenal",
+        "page_rank": "Reputasi halaman",
+        "google_index": "Status terindeks Google",
+        "web_traffic": "Traffic website",
+        "nb_www": "Penggunaan awalan www",
+        # tambahkan mapping lain sesuai kebutuhan
+    }
+    return mapping.get(feat_name, feat_name.replace("_", " "))
+
+
+def build_clean_top_lists(top_features, max_items=3):
+    increases, decreases = [], []
+    # Urutkan berdasarkan kontribusi absolut jika ada
+    for f in sorted(top_features, key=lambda x: x.get("abs_shap", 0), reverse=True):
+        label = _human_label(f.get("name", ""))
+        rule_reason = (f.get("reason") or "").strip()
+        shap_abs = float(f.get("abs_shap", 0) or 0)
+        shap_dir = f.get("shap_direction") or f.get("impact") or "NEUTRAL"
+
+        # Tentukan level pengaruh dari nilai absolut SHAP (tanpa menampilkan angka):
+        if shap_abs >= 0.1:
+            level = "kuat"
+        elif shap_abs >= 0.03:
+            level = "sedang"
+        elif shap_abs > 0:
+            level = "kecil"
+        else:
+            level = None
+
+        # Jika rule-based tidak memberikan alasan bermakna, buat alasan ringkas dari SHAP
+        if not rule_reason or rule_reason.lower().startswith("tidak ada dampak"):
+            if level and shap_dir in ("PHISHING", "BENIGN"):
+                reason = f"Memberi sinyal {level} ke {shap_dir}"
+            else:
+                reason = "Tidak ada indikasi pengaruh yang jelas"
+        else:
+            reason = rule_reason
+
+        item = {"label": label, "reason": reason}
+        if shap_dir == "PHISHING":
+            if len(increases) < max_items:
+                increases.append(item)
+        elif shap_dir == "BENIGN":
+            if len(decreases) < max_items:
+                decreases.append(item)
+        # jika sudah cukup fitur di kedua sisi, keluar
+        if len(increases) >= max_items and len(decreases) >= max_items:
+            break
+    return increases, decreases
+
+
 def explain_prediction(model, X_row, feature_names, top_n=3, background=None):
     import numpy as np
     import shap
 
     arr = X_row.values if hasattr(X_row, "values") else np.array(X_row)
+    _fn_list = list(feature_names)
 
     try:
         # Cocok untuk Random Forest dan XGBoost karena keduanya tree-based model.
         explainer = shap.TreeExplainer(model)
         shap_values = explainer.shap_values(arr)
         shap_vals = _extract_phishing_shap_vector(shap_values, class_index=1)
-        top = _make_shap_top_items(shap_vals, feature_names, top_n=top_n)
+        # Hitung semua SHAP sekaligus — top 5 untuk tampilan, semua untuk log Excel
+        all_items = _make_shap_top_items(shap_vals, _fn_list, top_n=len(_fn_list))
+        top = all_items[:top_n]
 
         explanation = ", ".join(
             f"{item['name']} ({item['shap_value_signed']:.4f}; arah={item['shap_direction']})"
             for item in top
         )
-        return top, explanation
+        return top, explanation, all_items
 
     except Exception as e_tree:
         try:
@@ -149,16 +214,17 @@ def explain_prediction(model, X_row, feature_names, top_n=3, background=None):
             explainer = shap.KernelExplainer(model.predict_proba, background)
             shap_values = explainer.shap_values(arr, nsamples=100)
             shap_vals = _extract_phishing_shap_vector(shap_values, class_index=1)
-            top = _make_shap_top_items(shap_vals, feature_names, top_n=top_n)
+            all_items_k = _make_shap_top_items(shap_vals, _fn_list, top_n=len(_fn_list))
+            top = all_items_k[:top_n]
 
             explanation = ", ".join(
                 f"{item['name']} ({item['shap_value_signed']:.4f}; arah={item['shap_direction']})"
                 for item in top
             )
-            return top, f"(KernelExplainer) {explanation}"
+            return top, f"(KernelExplainer) {explanation}", all_items_k
 
         except Exception as e_kernel:
-            return [], f"Penjelasan otomatis gagal: {str(e_kernel)}"
+            return [], f"Penjelasan otomatis gagal: {str(e_kernel)}", []
 
 
 def get_phishing_risk_direction(feature_name, feature_value):
@@ -313,7 +379,9 @@ def generate_comprehensive_explanation(
         ):
             final_phishing_prob = clamp01(risk_score / 10.0)
     else:
-        final_prediction = "BENIGN" if final_phishing_prob < 0.6 else "PHISHING"
+        final_prediction = (
+            "BENIGN" if final_phishing_prob < FINAL_THRESHOLD else "PHISHING"
+        )
 
     confidence = (
         final_phishing_prob
@@ -384,36 +452,47 @@ def generate_comprehensive_explanation(
 
     top_features = []
     shap_explanation = ""
+    all_shap_items = []  # Semua fitur dengan SHAP (untuk log Excel)
 
     # Coba jelaskan menggunakan SHAP pada active_model terlebih dahulu, jika tersedia
     if active_model is not None:
         try:
-            shap_top, shap_explanation = explain_prediction(
+            shap_top, shap_explanation, all_shap_items = explain_prediction(
                 active_model, feat_array, feature_names, top_n=5
             )
             # Bentuk struktur top_features dari hasil SHAP.
-            # impact mengikuti arah signed SHAP, bukan sekadar heuristic rule-based.
+            # impact di-reconcile antara SHAP direction dan rule-based direction.
             for item in shap_top:
                 feat_name = item["name"]
-                if feat_name in feat_dict:
-                    feat_value = feat_dict.get(feat_name, 0)
-                    rule_direction, reason = get_phishing_risk_direction(
-                        feat_name, feat_value
-                    )
-                    shap_direction = item.get("shap_direction", "NEUTRAL")
-                    top_features.append(
-                        {
-                            "name": feat_name,
-                            "value": feat_value,
-                            "impact": shap_direction,
-                            "rule_impact": rule_direction,
-                            "reason": reason,
-                            "shap_value": float(item["shap_value_signed"]),
-                            "shap_value_signed": float(item["shap_value_signed"]),
-                            "abs_shap": float(item["abs_shap"]),
-                            "shap_direction": shap_direction,
-                        }
-                    )
+                # Beberapa fitur model seperti page_rank/google_index/web_traffic bisa tidak
+                # berhasil diekstrak saat runtime dan masuk ke model sebagai default 0.
+                # Tetap tampilkan fitur SHAP tersebut agar daftar dampak fitur konsisten 5 item.
+                feat_value = feat_dict.get(feat_name, 0)
+                rule_direction, reason = get_phishing_risk_direction(
+                    feat_name, feat_value
+                )
+                shap_direction = item.get("shap_direction", "NEUTRAL")
+                # Reconcile: rule lebih reliable secara semantik untuk ditampilkan ke user.
+                # Jika rule punya pendapat (bukan NEUTRAL), pakai rule sebagai impact display.
+                # Ini mencegah fitur seperti nb_www=1 tampil sebagai PHISHING hanya karena
+                # signed SHAP kebetulan negatif kecil (noise).
+                if rule_direction != "NEUTRAL":
+                    display_impact = rule_direction
+                else:
+                    display_impact = shap_direction
+                top_features.append(
+                    {
+                        "name": feat_name,
+                        "value": feat_value,
+                        "impact": display_impact,
+                        "rule_impact": rule_direction,
+                        "reason": reason,
+                        "shap_value": float(item["shap_value_signed"]),
+                        "shap_value_signed": float(item["shap_value_signed"]),
+                        "abs_shap": float(item["abs_shap"]),
+                        "shap_direction": shap_direction,
+                    }
+                )
         except Exception as e:
             # Log debug, tapi jangan hentikan alur
             print(f"[DEBUG] SHAP explanation for {active_model_name} failed: {e}")
@@ -425,33 +504,37 @@ def generate_comprehensive_explanation(
         other_name = "XGBoost" if active_model is rf_model else "Random Forest"
         if other_model is not None:
             try:
-                shap_top, shap_explanation = explain_prediction(
+                shap_top, shap_explanation, all_shap_items_alt = explain_prediction(
                     other_model, feat_array, feature_names, top_n=5
                 )
                 for item in shap_top:
                     feat_name = item["name"]
-                    if feat_name in feat_dict:
-                        feat_value = feat_dict.get(feat_name, 0)
-                        rule_direction, reason = get_phishing_risk_direction(
-                            feat_name, feat_value
-                        )
-                        shap_direction = item.get("shap_direction", "NEUTRAL")
-                        top_features.append(
-                            {
-                                "name": feat_name,
-                                "value": feat_value,
-                                "impact": shap_direction,
-                                "rule_impact": rule_direction,
-                                "reason": reason,
-                                "shap_value": float(item["shap_value_signed"]),
-                                "shap_value_signed": float(item["shap_value_signed"]),
-                                "abs_shap": float(item["abs_shap"]),
-                                "shap_direction": shap_direction,
-                            }
-                        )
+                    feat_value = feat_dict.get(feat_name, 0)
+                    rule_direction, reason = get_phishing_risk_direction(
+                        feat_name, feat_value
+                    )
+                    shap_direction = item.get("shap_direction", "NEUTRAL")
+                    if rule_direction != "NEUTRAL":
+                        display_impact = rule_direction
+                    else:
+                        display_impact = shap_direction
+                    top_features.append(
+                        {
+                            "name": feat_name,
+                            "value": feat_value,
+                            "impact": display_impact,
+                            "rule_impact": rule_direction,
+                            "reason": reason,
+                            "shap_value": float(item["shap_value_signed"]),
+                            "shap_value_signed": float(item["shap_value_signed"]),
+                            "abs_shap": float(item["abs_shap"]),
+                            "shap_direction": shap_direction,
+                        }
+                    )
                 # Jika berhasil, ubah nama model dominan yang dijelaskan
                 if top_features:
                     active_model_name = other_name
+                    all_shap_items = all_shap_items_alt
             except Exception as e:
                 print(
                     f"[DEBUG] SHAP alternative explanation ({other_name}) failed: {e}"
@@ -533,17 +616,47 @@ def generate_comprehensive_explanation(
     phishing_count = sum(1 for f in top_features if f.get("impact") == "PHISHING")
     benign_count = sum(1 for f in top_features if f.get("impact") == "BENIGN")
 
+    # SHAP adalah kontribusi berbobot, bukan voting.
+    # Hitung total bobot (abs SHAP) per arah dari top-5 agar bisa dijelaskan
+    # mengapa jumlah fitur lebih banyak ke PHISHING belum tentu menaikkan skor.
+    top5_phishing_shap = round(
+        sum(
+            float(f.get("abs_shap") or 0)
+            for f in top_features
+            if f.get("shap_direction") == "PHISHING"
+        ),
+        4,
+    )
+    top5_benign_shap = round(
+        sum(
+            float(f.get("abs_shap") or 0)
+            for f in top_features
+            if f.get("shap_direction") == "BENIGN"
+        ),
+        4,
+    )
+    total_feature_count = len(feature_names) if feature_names else 0
+
     phishing_prob_display = round(final_phishing_prob, 4)
     benign_prob_display = round(1.0 - final_phishing_prob, 4)
 
     # Susun reasoning textual yang informatif
     if final_prediction == "BENIGN":
-        if final_phishing_prob < 0.6:
+        if final_phishing_prob < FINAL_THRESHOLD:
             reasoning = f"🟢 URL terdeteksi sebagai BENIGN dengan phishing probability {phishing_prob_display:.2%}. "
             if shap_explanation:
                 reasoning += f"(SHAP) Top features: {shap_explanation}. "
-            if benign_count > 0:
-                reasoning += f"{benign_count} fitur utama mendukung kondisi benign. "
+            # Jelaskan paradoks jumlah vs bobot agar tidak membingungkan
+            reasoning += (
+                f"Dari {total_feature_count} fitur yang dianalisis, "
+                f"{phishing_count} dari 5 fitur terkuat mengarah ke PHISHING "
+                f"(total bobot={top5_phishing_shap:.4f}) dan "
+                f"{benign_count} mengarah ke BENIGN "
+                f"(total bobot={top5_benign_shap:.4f}). "
+                f"SHAP bukan sistem voting — selisih bobot top-5 sangat kecil, "
+                f"dan sisa {total_feature_count - 5} fitur lainnya secara kumulatif mendukung BENIGN "
+                f"sehingga skor akhir tetap rendah. "
+            )
             reasoning += "Website ini AMAN untuk dikunjungi."
         else:
             reasoning = f"URL dikategorikan sebagai BENIGN (phishing probability: {phishing_prob_display:.2%})."
@@ -552,7 +665,10 @@ def generate_comprehensive_explanation(
         if shap_explanation:
             reasoning += f"(SHAP) Top features: {shap_explanation}. "
         if phishing_count > 0:
-            reasoning += f"{phishing_count} fitur utama menunjukkan indikator phishing berbahaya. "
+            reasoning += (
+                f"{phishing_count} dari 5 fitur terkuat menunjukkan indikator phishing "
+                f"(total bobot SHAP={top5_phishing_shap:.4f}). "
+            )
         if decision_source == "rule_based_prefilter_phishing" and rule_detail:
             reasoning += f"Keputusan rule-based dipicu oleh: {rule_detail}. "
         reasoning += "Website ini TIDAK AMAN untuk dikunjungi."
@@ -572,9 +688,13 @@ def generate_comprehensive_explanation(
             )
         ),
         "top_influential_features": top_features,
+        "all_shap_features": all_shap_items,
         "model_contribution_probability": probs,
         "phishing_indicators_count": phishing_count,
         "benign_indicators_count": benign_count,
+        "top5_phishing_shap_sum": top5_phishing_shap,
+        "top5_benign_shap_sum": top5_benign_shap,
+        "total_feature_count": total_feature_count,
         "ai_reasoning": reasoning,
         "shap_explanation": shap_explanation,
         "detailed_explanation": format_explanation_text(
@@ -594,6 +714,86 @@ def generate_comprehensive_explanation(
             reasoning,
         ),
     }
+    # Prepare structured input for LLM: tiga lapis (asal skor, menaikkan, menurunkan)
+    try:
+        increases, decreases = build_clean_top_lists(
+            explanation.get("top_influential_features", []), max_items=5
+        )
+        # Perbarui top_influential_features agar alasan tidak lagi "Tidak ada dampak signifikan"
+        tf = explanation.get("top_influential_features", []) or []
+        updated_tf = []
+        for f in tf:
+            rule_reason = (f.get("reason") or "").strip()
+            shap_abs = float(f.get("abs_shap", 0) or 0)
+            shap_dir = f.get("shap_direction") or f.get("impact") or "NEUTRAL"
+            if not rule_reason or rule_reason.lower().startswith("tidak ada dampak"):
+                if shap_abs >= 0.1:
+                    level = "kuat"
+                elif shap_abs >= 0.03:
+                    level = "sedang"
+                elif shap_abs > 0:
+                    level = "kecil"
+                else:
+                    level = None
+                if level and shap_dir in ("PHISHING", "BENIGN"):
+                    reason = f"Memberi sinyal {level} ke {shap_dir}"
+                else:
+                    reason = "Tidak ada indikasi pengaruh yang jelas"
+                f["reason"] = reason
+            updated_tf.append(f)
+        explanation["top_influential_features"] = updated_tf
+
+        explanation_payload = {
+            "score_origin": {
+                "model": explanation.get("main_contributing_model"),
+                "phishing_probability": round(
+                    explanation.get("phishing_probability", 0.0), 4
+                ),
+                "total_features_analyzed": explanation.get("total_feature_count", 0),
+            },
+            "shap_balance_top5": {
+                "phishing_direction_weight": explanation.get(
+                    "top5_phishing_shap_sum", 0
+                ),
+                "benign_direction_weight": explanation.get("top5_benign_shap_sum", 0),
+                "note": (
+                    "Ini adalah bobot kontribusi model (bukan voting). "
+                    "Jumlah fitur mengarah PHISHING bisa lebih banyak tetapi jika bobotnya kecil "
+                    "dan sisa fitur mendukung BENIGN, skor akhir tetap rendah."
+                ),
+            },
+            "increases": increases,
+            "decreases": decreases,
+        }
+        explanation["llm_input_structured"] = explanation_payload
+
+        prompt_llm = f"""
+Anda asisten ringkas. Tuliskan penjelasan singkat dalam bahasa Indonesia (bahasa awam) dengan tepat 3 lapis:
+1) Asal skor akhir: 1 kalimat yang jelaskan model dominan dan bahwa skor adalah probabilitas.
+2) Fitur yang paling MENAIKKAN risiko: sebut hingga 5 fitur teratas dengan label singkat + 1 kalimat alasan tiap fitur. Jangan tampilkan angka atau istilah teknis.
+3) Fitur yang paling MENURUNKAN risiko: sebut hingga 5 fitur (jika ada) serupa formatnya.
+Akhiri dengan 1 kalimat rekomendasi: "Aman untuk dikunjungi" atau "Tidak aman — hindari".
+PENTING:
+- Jangan gunakan istilah 'SHAP', 'koefisien', atau nilai teknis.
+- Tidak boleh menambahkan alasan di luar daftar fitur yang diberikan.
+- Jika jumlah fitur mengarah PHISHING lebih banyak tapi skor akhir tetap rendah/BENIGN,
+  jelaskan dengan bahasa awam bahwa model memakai bobot kontribusi (bukan voting)
+  dan fitur-fitur lainnya di luar top-5 secara keseluruhan mendukung BENIGN.
+Gunakan input terstruktur berikut (format JSON) untuk menghasilkan teks:
+{json.dumps(explanation_payload, ensure_ascii=False, indent=2)}
+Buat keseluruhan output sekitar 5–8 kalimat agar alasannya cukup jelas dan tidak membingungkan.
+"""
+
+        try:
+            llm_out = get_llm_reasoning(prompt_llm)
+        except Exception:
+            llm_out = None
+        explanation["llm_reasoning"] = llm_out
+        explanation["_llm_prompt"] = prompt_llm
+    except Exception:
+        # jika ada kegagalan pembuatan payload/LLM, jangan ganggu alur utama
+        pass
+
     return explanation
 
 
@@ -608,7 +808,7 @@ def format_explanation_text(
 🎯 FINAL PREDICTION
    Status: {"🟢 BENIGN (SAFE)" if final_prediction == "BENIGN" else "🔴 PHISHING (DANGEROUS)"}
    Classification Confidence: {confidence:.2%}
-   Prediction Range: {"0.00-0.60 (BENIGN)" if final_prediction == "BENIGN" else ">0.60 (PHISHING)"}
+   Prediction Range: {f"0.00-{FINAL_THRESHOLD:.2f} (BENIGN)" if final_prediction == "BENIGN" else f">={FINAL_THRESHOLD:.2f} (PHISHING)"}
 
 🔍 DECISION ANALYSIS
    Main Contributing Model: {main_model}
@@ -644,10 +844,11 @@ except Exception:
     BeautifulSoup = None
 
 PHISHING_CLASS_VALUE = 1
+FINAL_THRESHOLD = 0.6
 DEFAULT_PREDICT_MODE = "url37"
 DEFAULT_USE_PREFILTER = True
 DEFAULT_DECISION_MODE = "hybrid_prefilter"
-PREFILTER_HARD_PHISHING_SCORE = 7
+PREFILTER_HARD_PHISHING_SCORE = 5
 PREFILTER_BLOCK_ON_VI_HIT = True
 PREFILTER_PHISHING_MIN_CONF = 0.95
 WEB_FETCH_TIMEOUT = 6
@@ -753,11 +954,18 @@ WEB_CONTENT_KEYS = {
 }
 
 _TLD_EXTRACTOR = tldextract.TLDExtract(suffix_list_urls=None)
-app = Flask(__name__, static_folder="static")
-LOG_PATH = "log_feature_extraction.xlsx"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-def log_feature_extraction(url, mode, feats, feature_columns_81, status):
+def app_path(*parts):
+    return os.path.join(BASE_DIR, *parts)
+
+
+app = Flask(__name__, static_folder=app_path("static"))
+LOG_PATH = app_path("log_feature_extraction.xlsx")
+
+
+def log_feature_extraction(url, mode, feats, feature_columns, status):
     if os.path.exists(LOG_PATH):
         try:
             df = pd.read_excel(LOG_PATH)
@@ -769,7 +977,7 @@ def log_feature_extraction(url, mode, feats, feature_columns_81, status):
         df = None
         no = 1
     row = {"NO": no, "URL": url, "MODE": mode, "STATUS": status}
-    for feat in feature_columns_81:
+    for feat in feature_columns:
         row[feat] = feats.get(feat, 0.0)
     row["EXPLANATION"] = feats.get("_explanation", "")
     row["TOP_FEATURES"] = feats.get("_top_features", "")
@@ -785,13 +993,16 @@ def log_feature_extraction(url, mode, feats, feature_columns_81, status):
 
 
 try:
-    FEATURE_COLUMNS_81 = [
+    FEATURE_COLUMNS_HYBRID81 = [
         line.strip()
-        for line in open("feature_columns_81.txt", encoding="utf-8")
+        for line in open(app_path("feature_columns_hybrid81.txt"), encoding="utf-8")
         if line.strip()
     ]
 except Exception:
-    FEATURE_COLUMNS_81 = []
+    FEATURE_COLUMNS_HYBRID81 = []
+
+# Alias sementara supaya kode lama yang masih refer ke FEATURE_COLUMNS_81 tidak error.
+FEATURE_COLUMNS_81 = FEATURE_COLUMNS_HYBRID81
 
 
 def load_model(path):
@@ -1201,7 +1412,7 @@ def rule_based_eval(url: str, return_detail: bool = False):
         "nb_comma": (feats.get("nb_comma", 0) >= 1),
         "random_domain": (feats.get("random_domain", 0) == 1),
     }
-    less_important = {
+    moderate_rules = {
         "length_hostname": (feats.get("length_hostname", 0) > 30),
         "nb_dollar": (feats.get("nb_dollar", 0) >= 1),
         "nb_qm": (feats.get("nb_qm", 0) > 2),
@@ -1219,7 +1430,7 @@ def rule_based_eval(url: str, return_detail: bool = False):
 
     vi_hits = [k for k, v in very_important.items() if v]
     imp_hits = [k for k, v in important.items() if v]
-    less_hits = [k for k, v in less_important.items() if v]
+    less_hits = [k for k, v in moderate_rules.items() if v]
     risk_score = (2 * len(imp_hits)) + len(less_hits)
 
     if len(vi_hits) >= 1 or risk_score >= 5:
@@ -1247,20 +1458,32 @@ def rule_based_eval(url: str, return_detail: bool = False):
 
 
 def get_model_and_features(url):
-    feats = extract_features(url, include_web_content=True)
-    suffix = (
-        "_81"
-        if any(feats.get(k, None) not in (None, 0) for k in WEB_CONTENT_KEYS)
-        else "_37"
-    )
-    rf = load_model(f"random_forest_model{suffix}.pkl")
-    xgb = load_model(f"xgboost_model{suffix}.pkl")
+    full_url, _, _, _ = parse_url(url)
+
+    # Cek web-content secara terpisah.
+    # Nilai 0 pada fitur web-content tetap valid, jadi jangan pakai logika
+    # "ada nilai non-zero" untuk memilih model.
+    web_feats = extract_web_content_features(full_url)
+    web_content_ok = bool(web_feats)
+
+    suffix = "_hybrid81" if web_content_ok else "_url37"
+
+    rf = load_model(app_path(f"random_forest_model{suffix}.pkl"))
+    xgb = load_model(app_path(f"xgboost_model{suffix}.pkl"))
+
     try:
-        meta = load_model(f"rule_lr{suffix}.pkl")
+        meta = load_model(app_path(f"rule_lr{suffix}.pkl"))
     except Exception:
         meta = None
-    cols = load_feature_columns(f"feature_columns{suffix}.txt")
-    return rf, xgb, meta, cols, (suffix == "_81")
+
+    cols = load_feature_columns(app_path(f"feature_columns{suffix}.txt"))
+
+    if not cols:
+        raise RuntimeError(
+            f"Feature columns kosong/tidak ditemukan untuk suffix {suffix}"
+        )
+
+    return rf, xgb, meta, cols, web_content_ok
 
 
 def build_ml_vector(url: str, cols: list, include_web_content: bool):
@@ -1384,7 +1607,7 @@ def predict():
     rf, xgb, meta, cols, web_content_ok = get_model_and_features(url)
     include_web_content = web_content_ok
     feats_full = extract_features(url, include_web_content=True)
-    mode = "81" if web_content_ok else "37"
+    mode = "hybrid81" if web_content_ok else "url37"
     risk_score, risk_category, rule_flag, rule_detail = rule_based_eval(
         url, return_detail=True
     )
@@ -1402,7 +1625,7 @@ def predict():
     ):
         p_phish = clamp01(final_phishing_prob)
         p_safe = clamp01(1.0 - p_phish)
-        final_label = 1 if p_phish >= 0.6 else 0
+        final_label = 1 if p_phish >= FINAL_THRESHOLD else 0
         category = "phishing" if final_label == 1 else "benign"
         confidence = round(p_phish if final_label == 1 else p_safe, 4)
 
@@ -1437,9 +1660,13 @@ def predict():
                         "impact": f["impact"],
                         "reason": f["reason"],
                         "shap_value": f.get("shap_value", None),
-                        "shap_value_signed": f.get("shap_value_signed", f.get("shap_value", None)),
+                        "shap_value_signed": f.get(
+                            "shap_value_signed", f.get("shap_value", None)
+                        ),
                         "abs_shap": f.get("abs_shap", None),
-                        "shap_direction": f.get("shap_direction", f.get("impact", None)),
+                        "shap_direction": f.get(
+                            "shap_direction", f.get("impact", None)
+                        ),
                         "rule_impact": f.get("rule_impact", None),
                     }
                     for f in comprehensive_exp["top_influential_features"]
@@ -1457,6 +1684,8 @@ def predict():
                 "ai_reasoning": comprehensive_exp["ai_reasoning"],
                 "shap_explanation": comprehensive_exp.get("shap_explanation", ""),
                 "detailed_explanation": comprehensive_exp["detailed_explanation"],
+                # Teruskan semua SHAP values untuk log Excel
+                "all_shap_features": comprehensive_exp.get("all_shap_features", []),
             }
         except Exception as e:
             explanation_dict = {
@@ -1482,7 +1711,7 @@ def predict():
             "final_label": final_label,
             "final_phishing_prob": round(p_phish, 4),
             "final_safe_prob": round(p_safe, 4),
-            "final_threshold": 0.6,
+            "final_threshold": FINAL_THRESHOLD,
             "decision_mode": decision_mode,
             "decision_source": decision_source,
             "model_name": model_name,
@@ -1504,31 +1733,84 @@ def predict():
         resp["explanation_detailed"] = explanation_dict
         resp["explanation"] = explanation_dict["ai_reasoning"]
 
-        try:
-            top_feats = explanation_dict.get("top_influential_features", [])
-            if top_feats:
-                log_top_features_str = "\n".join(
-                    [
-                        f"- {f['name']} (nilai: {f['value']}) → {f['impact']}: {f.get('reason', '')}"
-                        for f in top_feats
-                    ]
+        # ── AI Reasoning: narasi alami ────────────────────────────
+        model_main = explanation_dict.get("main_contributing_model", model_name)
+        total_f_count = len(cols)
+        all_shap_all = explanation_dict.get("all_shap_features", [])
+        top5_names = [
+            f.get("name", "")
+            for f in explanation_dict.get("top_influential_features", [])
+        ]
+
+        # Pisahkan top-5 per arah untuk narasi
+        p_top5 = [
+            f
+            for f in explanation_dict.get("top_influential_features", [])
+            if f.get("shap_direction") == "PHISHING"
+        ]
+        b_top5 = [
+            f
+            for f in explanation_dict.get("top_influential_features", [])
+            if f.get("shap_direction") == "BENIGN"
+        ]
+        p_names_str = ", ".join(f.get("name", "") for f in p_top5)
+        b_names_str = ", ".join(f.get("name", "") for f in b_top5)
+        other_count = total_f_count - 5
+        result_word = "BENIGN" if category == "benign" else "PHISHING"
+        result_icon = "\u2705" if category == "benign" else "\u26a0\ufe0f"
+
+        # Bangun narasi alami tanpa menyebut angka teknis
+        if category == "benign":
+            if p_names_str and b_names_str:
+                body = (
+                    f"Beberapa karakteristik URL seperti **{p_names_str}** "
+                    f"menunjukkan indikator yang perlu diperhatikan, "
+                    f"namun hal ini diimbangi oleh indikator positif yang lebih dominan "
+                    f"dari **{b_names_str}** yang mendukung keamanan situs."
+                )
+            elif b_names_str:
+                body = (
+                    f"Karakteristik URL seperti **{b_names_str}** "
+                    f"memberikan sinyal keamanan yang kuat."
                 )
             else:
-                log_top_features_str = "Tidak ada fitur utama yang menonjol."
-            model_main = explanation_dict.get("main_contributing_model", model_name)
-
-            prompt_llm = (
-                f"Lakukan analisis singkat teknis (3-4 kalimat) mengapa URL berikut diklasifikasikan sebagai {category.upper()} "
-                f"dengan probabilitas phishing {p_phish:.2f}.\n\n"
-                f"URL: {url}\n"
-                f"Model utama: {model_main}\n"
-                f"Top fitur yang memberikan kontribusi:\n{log_top_features_str}\n\n"
-                "Akhiri dengan: satu kalimat berisi rekomendasi tindakan ('REKOMENDASI: BLOKIR' atau 'REKOMENDASI: IZINKAN'),"
-                "Hindari frasa ketidakpastian yang panjang."
+                body = (
+                    "Karakteristik URL secara keseluruhan menunjukkan pola yang aman."
+                )
+            overall = (
+                "Berbagai karakteristik lain dari URL ini juga turut dianalisis "
+                "dan secara keseluruhan mengarah pada kesimpulan bahwa situs ini aman untuk diakses."
             )
-            resp["llm_reasoning"] = get_llm_reasoning(prompt_llm)
-        except Exception as e:
-            resp["llm_reasoning"] = f"LLM error: {str(e)}"
+            conclusion = f"{result_icon} **Kesimpulan: URL ini AMAN untuk dikunjungi.**"
+        else:
+            if p_names_str and b_names_str:
+                body = (
+                    f"Karakteristik URL seperti **{p_names_str}** "
+                    f"menunjukkan indikator phishing yang kuat. "
+                    f"Meskipun ada beberapa sinyal aman dari **{b_names_str}**, "
+                    f"hal tersebut tidak cukup untuk mengimbangi sinyal bahaya yang ada."
+                )
+            elif p_names_str:
+                body = (
+                    f"Karakteristik URL seperti **{p_names_str}** "
+                    f"menunjukkan indikator phishing yang jelas dan berbahaya."
+                )
+            else:
+                body = "Karakteristik URL secara keseluruhan menunjukkan pola phishing yang mencurigakan."
+            overall = (
+                "Berbagai karakteristik lain dari URL ini juga turut dianalisis "
+                "dan memperkuat penilaian bahwa situs ini berbahaya."
+            )
+            conclusion = (
+                f"{result_icon} **Kesimpulan: URL ini TIDAK AMAN — hindari situs ini.**"
+            )
+
+        resp["llm_reasoning"] = (
+            f"URL ini dinilai **{result_word}** dengan skor phishing **{p_phish:.2f}** "
+            f"oleh model {model_main}.\n\n"
+            f"{body} {overall}\n\n"
+            f"{conclusion}"
+        )
 
         if debug:
             resp["debug"] = {
@@ -1543,19 +1825,87 @@ def predict():
             }
 
         log_explanation = explanation_dict.get("ai_reasoning", "")
-        log_top_features = "\n".join(
-            [
-                f"{i + 1}. {f['name']} | SHAP arah: {f.get('shap_direction', f.get('impact'))} | signed: {round(f.get('shap_value_signed', f.get('shap_value', 0)), 4) if f.get('shap_value_signed', f.get('shap_value')) is not None else ''} | abs: {round(f.get('abs_shap', 0), 4) if f.get('abs_shap') is not None else ''} | {f.get('reason', '')}"
+
+        # Log ke Excel:
+        # Sertakan fitur yang punya SHAP nyata (abs_shap > 0) ATAU nilai != 0.
+        # Exclude hanya fitur yang benar-benar null: nilai=0 DAN abs_shap≈0.
+        all_shap_for_log = explanation_dict.get("all_shap_features", [])
+        all_shap_lookup = {item["name"]: item for item in all_shap_for_log}
+
+        def _sl(v):
+            if v >= 0.1:
+                return "kuat"
+            if v >= 0.03:
+                return "sedang"
+            return "kecil"
+
+        # Kumpulkan kandidat fitur
+        candidates = {}  # name -> shap_item
+        for f in all_shap_for_log:
+            if float(f.get("abs_shap") or 0) > 1e-9:  # punya SHAP
+                candidates[f["name"]] = f
+        for feat_name in cols:
+            if feat_name in candidates:
+                continue
+            try:
+                fval = float(feats_full.get(feat_name, 0))
+            except Exception:
+                fval = 0.0
+            if abs(fval) > 1e-9:  # nilai non-zero
+                # pakai SHAP dari lookup jika ada; kalau tidak, buat entri minimal
+                candidates[feat_name] = all_shap_lookup.get(
+                    feat_name,
+                    {
+                        "name": feat_name,
+                        "shap_direction": "NEUTRAL",
+                        "abs_shap": 0.0,
+                        "shap_value_signed": 0.0,
+                    },
+                )
+
+        # Urutkan: SHAP terbesar dulu, lalu fitur non-zero tanpa SHAP
+        sorted_candidates = sorted(
+            candidates.values(),
+            key=lambda x: float(x.get("abs_shap") or 0),
+            reverse=True,
+        )
+
+        log_feature_lines = []
+        for i, f in enumerate(sorted_candidates):
+            feat_name = f.get("name", "")
+            val = feats_full.get(feat_name, 0)
+            shap_dir = f.get("shap_direction", "NEUTRAL")
+            signed = float(f.get("shap_value_signed") or 0)
+            abs_v = float(f.get("abs_shap") or 0)
+            if abs_v > 1e-9:
+                level = _sl(abs_v)
+                sign_str = f"+{abs_v:.4f}" if signed >= 0 else f"-{abs_v:.4f}"
+                log_feature_lines.append(
+                    f"{i + 1}. {feat_name} | nilai: {val} | arah: {shap_dir} "
+                    f"| Memberi sinyal {level} ke {shap_dir} dengan skor {sign_str}"
+                )
+            else:
+                # Nilai non-zero tapi SHAP tidak signifikan
+                log_feature_lines.append(
+                    f"{i + 1}. {feat_name} | nilai: {val} | arah: - | tidak berkontribusi signifikan"
+                )
+        if not log_feature_lines:
+            # Fallback jika SHAP tidak tersedia sama sekali
+            log_feature_lines = [
+                f"{i + 1}. {f['name']} | nilai: {feats_full.get(f['name'], 0)} "
+                f"| arah: {f.get('impact', '')} | {f.get('reason', '')}"
                 for i, f in enumerate(
                     explanation_dict.get("top_influential_features", [])
                 )
             ]
-        )
+        log_top_features = "\n".join(log_feature_lines)
         feats_for_log = dict(feats_full)
         feats_for_log["_explanation"] = log_explanation
         feats_for_log["_top_features"] = log_top_features
         feats_for_log["_llm_reasoning"] = resp.get("llm_reasoning", "")
-        log_feature_extraction(url, mode, feats_for_log, FEATURE_COLUMNS_81, category)
+        log_feature_extraction(
+            url, mode, feats_for_log, FEATURE_COLUMNS_HYBRID81, category
+        )
 
         return jsonify(resp)
 
