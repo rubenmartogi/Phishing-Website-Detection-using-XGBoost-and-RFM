@@ -845,7 +845,7 @@ except Exception:
 
 PHISHING_CLASS_VALUE = 1
 FINAL_THRESHOLD = 0.6
-DEFAULT_PREDICT_MODE = "url37"
+DEFAULT_PREDICT_MODE = "_37"
 DEFAULT_USE_PREFILTER = True
 DEFAULT_DECISION_MODE = "hybrid_prefilter"
 PREFILTER_HARD_PHISHING_SCORE = 5
@@ -993,16 +993,16 @@ def log_feature_extraction(url, mode, feats, feature_columns, status):
 
 
 try:
-    FEATURE_COLUMNS_HYBRID81 = [
+    FEATURE_COLUMNS_81 = [
         line.strip()
-        for line in open(app_path("feature_columns_hybrid81.txt"), encoding="utf-8")
+        for line in open(app_path("feature_columns_81.txt"), encoding="utf-8")
         if line.strip()
     ]
 except Exception:
-    FEATURE_COLUMNS_HYBRID81 = []
+    FEATURE_COLUMNS_81 = []
 
 # Alias sementara supaya kode lama yang masih refer ke FEATURE_COLUMNS_81 tidak error.
-FEATURE_COLUMNS_81 = FEATURE_COLUMNS_HYBRID81
+FEATURE_COLUMNS_81 = FEATURE_COLUMNS_81
 
 
 def load_model(path):
@@ -1248,6 +1248,9 @@ def extract_url_features(url: str) -> dict:
 
 def extract_web_content_features(url: str) -> dict:
     out = {}
+    out["page_rank"] = None
+    out["google_index"] = None
+    out["web_traffic"] = None
     try:
         resp = requests.get(
             url,
@@ -1466,7 +1469,7 @@ def get_model_and_features(url):
     web_feats = extract_web_content_features(full_url)
     web_content_ok = bool(web_feats)
 
-    suffix = "_hybrid81" if web_content_ok else "_url37"
+    suffix = "_81" if web_content_ok else "_37"
 
     rf = load_model(app_path(f"random_forest_model{suffix}.pkl"))
     xgb = load_model(app_path(f"xgboost_model{suffix}.pkl"))
@@ -1488,7 +1491,11 @@ def get_model_and_features(url):
 
 def build_ml_vector(url: str, cols: list, include_web_content: bool):
     feats = extract_features(url, include_web_content=include_web_content)
-    vector = [to_float(feats.get(c, 0.0), 0.0) for c in cols]
+    vector = [
+        np.nan if (c not in feats or feats[c] is None)
+        else to_float(feats[c], np.nan)
+        for c in cols
+    ]
     return np.array([vector], dtype=float), cols
 
 
@@ -1607,7 +1614,7 @@ def predict():
     rf, xgb, meta, cols, web_content_ok = get_model_and_features(url)
     include_web_content = web_content_ok
     feats_full = extract_features(url, include_web_content=True)
-    mode = "hybrid81" if web_content_ok else "url37"
+    mode = "_81" if web_content_ok else "_37"
     risk_score, risk_category, rule_flag, rule_detail = rule_based_eval(
         url, return_detail=True
     )
@@ -1904,7 +1911,7 @@ def predict():
         feats_for_log["_top_features"] = log_top_features
         feats_for_log["_llm_reasoning"] = resp.get("llm_reasoning", "")
         log_feature_extraction(
-            url, mode, feats_for_log, FEATURE_COLUMNS_HYBRID81, category
+            url, mode, feats_for_log, FEATURE_COLUMNS_81, category
         )
 
         return jsonify(resp)

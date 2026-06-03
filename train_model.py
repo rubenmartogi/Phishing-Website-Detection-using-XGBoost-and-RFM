@@ -21,7 +21,7 @@ GA_POP_SIZE = 16
 GA_N_GEN = 8
 GA_CXPB = 0.7
 GA_MUTPB = 0.3
-GA_CV_SPLITS = 5
+GA_CV_SPLITS = 3
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 data_file_path = os.path.join(current_dir, "DataFiles", "data_cleaning.csv")
@@ -72,12 +72,6 @@ def load_and_prepare_data(feature_mode):
 
     data = pd.read_csv(data_file_path)
     data.columns = data.columns.str.strip()
-
-    # PERBAIKAN 1: Bersihkan duplikasi data untuk mencegah Kebocoran Data (Data Leakage)
-    if "url" in data.columns:
-        data = data.drop_duplicates(subset=["url"]).copy()
-    else:
-        data = data.drop_duplicates().copy()
 
     if TARGET_COL not in data.columns:
         raise ValueError(f"Kolom target '{TARGET_COL}' tidak ditemukan di dataset.")
@@ -139,20 +133,20 @@ def tune_rf_ga(X_train, y_train):
 
     def init_ind():
         return rf_ind_cls([
-            random.randint(200, 600),  # n_estimators: Jumlah pohon ideal (200 - 600)
-            random.randint(10, 25),   # max_depth: Jangan terlalu dangkal. 10 - 25 bagus untuk 81 fitur
-            random.randint(2, 10),    # min_samples_split: Diperkecil (2 - 10) agar pohon lebih sensitif terhadap pola
-            random.randint(1, 4),     # min_samples_leaf: (1 - 4) mencegah overfitting di ujung daun
-            random.randint(0, 1),     # max_features: Batasi ke 0: "sqrt" atau 1: "log2"
+            random.randint(100, 500),
+            random.randint(3, 16),
+            random.randint(2, 20),
+            random.randint(1, 10),
+            random.randint(0, 2),
         ])
 
     def decode(ind):
-        max_feat = {0: "sqrt", 1: "log2"}[int(clamp(round(ind[4]), 0, 1))]
+        max_feat = {0: "sqrt", 1: "log2", 2: None}[int(clamp(round(ind[4]), 0, 2))]
         return {
-            "n_estimators": int(clamp(round(ind[0]), 200, 600)),
-            "max_depth": int(clamp(round(ind[1]), 10, 25)),
-            "min_samples_split": int(clamp(round(ind[2]), 2, 10)),
-            "min_samples_leaf": int(clamp(round(ind[3]), 1, 4)),
+            "n_estimators": int(clamp(round(ind[0]), 100, 500)),
+            "max_depth": int(clamp(round(ind[1]), 3, 16)),
+            "min_samples_split": int(clamp(round(ind[2]), 2, 20)),
+            "min_samples_leaf": int(clamp(round(ind[3]), 1, 10)),
             "max_features": max_feat,
             "random_state": RANDOM_STATE,
             "n_jobs": -1,
@@ -164,7 +158,6 @@ def tune_rf_ga(X_train, y_train):
         score = cross_val_score(model, X_train, y_train, cv=cv, scoring="f1", n_jobs=-1).mean()
         return (float(score),)
 
-    # REVISI: Mengumpulkan inisialisasi toolbox di satu tempat terbawah agar scope fungsi batiniah lengkap
     toolbox = base.Toolbox()
     toolbox.register("individual", init_ind)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
@@ -173,9 +166,9 @@ def tune_rf_ga(X_train, y_train):
     toolbox.register(
         "mutate",
         tools.mutUniformInt,
-        low=[200, 10, 2, 1, 0],
-        up=[600, 25, 10, 4, 1],
-        indpb=0.2
+        low=[100, 3, 2, 1, 0],
+        up=[500, 16, 20, 10, 2],
+        indpb=0.25
     )
     toolbox.register("select", tools.selTournament, tournsize=3)
 
@@ -208,28 +201,28 @@ def tune_xgb_ga(X_train, y_train):
 
     def init_ind():
         return xgb_ind_cls([
-            random.randint(200, 600),       # n_estimators
-            random.uniform(0.03, 0.15),     # learning_rate
-            random.randint(5, 12),          # max_depth
-            random.uniform(0.70, 1.00),     # subsample
-            random.uniform(0.70, 1.00),     # colsample_bytree
-            random.uniform(1.0, 5.0),       # min_child_weight
-            random.uniform(0.0, 2.0),       # gamma
-            random.uniform(0.0, 2.0),       # reg_alpha
-            random.uniform(1.0, 5.0),       # reg_lambda
+            random.randint(150, 500),
+            random.uniform(0.01, 0.30),
+            random.randint(3, 10),
+            random.uniform(0.60, 1.00),
+            random.uniform(0.60, 1.00),
+            random.uniform(1.0, 10.0),
+            random.uniform(0.0, 5.0),
+            random.uniform(0.0, 5.0),
+            random.uniform(0.1, 10.0),
         ])
 
     def decode(ind):
         return {
-            "n_estimators": int(clamp(round(ind[0]), 200, 600)),
-            "learning_rate": float(clamp(ind[1], 0.03, 0.15)),
-            "max_depth": int(clamp(round(ind[2]), 5, 12)),
-            "subsample": float(clamp(ind[3], 0.70, 1.00)),
-            "colsample_bytree": float(clamp(ind[4], 0.70, 1.00)),
-            "min_child_weight": float(clamp(ind[5], 1.0, 5.0)),
-            "gamma": float(clamp(ind[6], 0.0, 2.0)),
-            "reg_alpha": float(clamp(ind[7], 0.0, 2.0)),
-            "reg_lambda": float(clamp(ind[8], 1.0, 5.0)),
+            "n_estimators": int(clamp(round(ind[0]), 150, 500)),
+            "learning_rate": float(clamp(ind[1], 0.01, 0.30)),
+            "max_depth": int(clamp(round(ind[2]), 3, 10)),
+            "subsample": float(clamp(ind[3], 0.60, 1.00)),
+            "colsample_bytree": float(clamp(ind[4], 0.60, 1.00)),
+            "min_child_weight": float(clamp(ind[5], 1.0, 10.0)),
+            "gamma": float(clamp(ind[6], 0.0, 5.0)),
+            "reg_alpha": float(clamp(ind[7], 0.0, 5.0)),
+            "reg_lambda": float(clamp(ind[8], 0.1, 10.0)),
             "eval_metric": "logloss",
             "random_state": RANDOM_STATE,
             "n_jobs": -1,
@@ -241,22 +234,21 @@ def tune_xgb_ga(X_train, y_train):
         score = cross_val_score(model, X_train, y_train, cv=cv, scoring="f1", n_jobs=-1).mean()
         return (float(score),)
 
-    def mutate_xgb(ind, indpb=0.2):
+    def mutate(ind, indpb=0.25):
         for i in range(len(ind)):
             if random.random() < indpb:
                 if i in (0, 2):
                     ind[i] += random.randint(-30, 30)
                 else:
-                    ind[i] += random.uniform(-0.05, 0.05)
+                    ind[i] += random.uniform(-0.2, 0.2)
         return (ind,)
 
-    # REVISI: Mengumpulkan inisialisasi toolbox di satu tempat terbawah agar scope fungsi batiniah lengkap
     toolbox = base.Toolbox()
     toolbox.register("individual", init_ind)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
     toolbox.register("evaluate", evaluate)
     toolbox.register("mate", tools.cxTwoPoint)
-    toolbox.register("mutate", mutate_xgb, indpb=0.2)
+    toolbox.register("mutate", mutate, indpb=0.3)
     toolbox.register("select", tools.selTournament, tournsize=3)
 
     pop = toolbox.population(n=GA_POP_SIZE)
@@ -296,10 +288,9 @@ def train_and_save(feature_mode, suffix):
     xgb_prob = xgb_model.predict_proba(X_test)[:, 1]
     print_metrics(f"XGBoost (GA Tuned) {suffix}", y_test, xgb_pred, xgb_prob)
 
-    # PERBAIKAN 2: Hapus class_weight="balanced" agar threshold Logistic Regression tidak bergeser ekstrim/paranoid
     stack_model = StackingClassifier(
         estimators=[("rf", rf_model), ("xgb", xgb_model)],
-        final_estimator=LogisticRegression(max_iter=1000, random_state=RANDOM_STATE),
+        final_estimator=LogisticRegression(max_iter=1000, class_weight="balanced", random_state=RANDOM_STATE),
         stack_method="predict_proba",
         n_jobs=-1
     )
@@ -334,19 +325,14 @@ def train_and_save(feature_mode, suffix):
     with open(os.path.join(current_dir, f"ga_tuning_report{suffix}.json"), "w", encoding="utf-8") as f:
         json.dump(tuning_report, f, indent=2)
 
-    print(f"\n✅ Model & metadata {suffix} tersimpan dengan aman.")
+    print(f"\n✅ Model & metadata {suffix} tersimpan.")
 
 def main():
     seed_everything(RANDOM_STATE)
-    
-    # PERBAIKAN 3: Gunakan suffix "_hybrid81" dan "_url37" agar 100% klop dengan pencarian di app.py
     # Train hybrid81
-    print("="*50 + "\nTRAINING MODE: HYBRID 81\n" + "="*50)
-    train_and_save("hybrid81", "_hybrid81")
-    
+    train_and_save("hybrid81", "_81")
     # Train url37
-    print("\n" + "="*50 + "\nTRAINING MODE: URL 37\n" + "="*50)
-    train_and_save("url37", "_url37")
+    train_and_save("url37", "_37")
 
 if __name__ == "__main__":
     main()
