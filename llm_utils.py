@@ -10,7 +10,7 @@ client = OpenAI(
 
 def get_llm_reasoning(prompt):
     response = client.chat.completions.create(
-        model="gpt-5-mini",
+        model="gpt-4o-mini",
         messages=[
             {
                 "role": "user",
