@@ -52,12 +52,11 @@ WEB_CONTENT_KEYS = {
 _TLD_EXTRACTOR = tldextract.TLDExtract(suffix_list_urls=None)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app = Flask(__name__, static_folder=os.path.join(BASE_DIR, "static"))
-LOG_PATH = os.path.join(BASE_DIR, "log_feature_extraction.xlsx")
 
-# ThreadPoolExecutor untuk menangani pemanggilan LLM non-blocking
+# Menggunakan ekstensi CSV murni untuk stabilitas penuh saat dibaca Microsoft Excel
+LOG_PATH = os.path.join(BASE_DIR, "log_feature_extraction.csv")
+
 executor = ThreadPoolExecutor(max_workers=4)
-
-# ── GLOBAL MODEL CACHE IN STARTUP (Saran Review) ──────────────────────────────
 GLOBAL_MODELS = {}
 
 def init_startup_cache():
@@ -79,7 +78,7 @@ def init_startup_cache():
             print(f"[STARTUP WARNING] Gagal memuat cache model {suffix}: {e}")
 
 init_startup_cache()
-# Memuat daftar kolom 81 untuk log Excel secara aman
+
 try:
     FEATURE_COLUMNS_81 = [
         l.strip() for l in open(os.path.join(BASE_DIR, "feature_columns_81.txt"), encoding="utf-8") if l.strip()
@@ -87,7 +86,6 @@ try:
 except Exception:
     FEATURE_COLUMNS_81 = []
 
-# ── Helper umum ────────────────────────────────────────────────────────────────
 def app_path(*parts): return os.path.join(BASE_DIR, *parts)
 def clamp01(v): return float(min(max(v, 0.0), 1.0))
 def to_float(v, d=0.0):
@@ -102,7 +100,6 @@ def is_ip(h):
     try: ipaddress.ip_address(h); return 1
     except: return 0
 
-# ── URL parsing & feature extraction ──────────────────────────────────────────
 def parse_url(url):
     u = url.strip()
     if not u.startswith(("http://","https://")): u = "http://" + u
@@ -141,7 +138,6 @@ def is_valid_url(url):
         ipaddress.ip_address(host); return True
     except: return False
 
-# [SARAN REVIEW] Dibungkus dengan cache agar pemanggilan beruntun tidak mengulang komputasi regex yang mahal
 @lru_cache(maxsize=128)
 def extract_url_features(url):
     full, parsed, hostname, path = parse_url(url)
@@ -198,7 +194,6 @@ def extract_url_features(url):
         "statistical_report": statistical_report,
     }
 
-# [SARAN REVIEW] Caching web content features per request agar tidak hit requests HTTP berkali-kali
 @lru_cache(maxsize=128)
 def extract_web_content_features(url):
     out = {}
@@ -265,14 +260,12 @@ def extract_web_content_features(url):
     enrich_external_features(out, base_host)
     return out
 
-# [SARAN REVIEW] Satu pipa ekstraksi gabungan untuk menghindari double parsing URL
 def extract_features(url, include_web_content):
     feats = extract_url_features(url)
     if include_web_content:
         feats.update(extract_web_content_features(url))
     return feats
 
-# ── Rule-based evaluation ──────────────────────────────────────────────────────
 def rule_based_eval(url, return_detail=False):
     feats = extract_url_features(url)
     very_important = {
@@ -323,7 +316,6 @@ def rule_based_eval(url, return_detail=False):
         }
     return risk_score, category, rule_flag
 
-# ── Memilih model dari cache startup global ──────────────────────────────────
 def get_model_and_features(url):
     feats = extract_features(url, include_web_content=True)
     web_content_ok = any(feats.get(k) not in (None, 0) for k in WEB_CONTENT_KEYS)
@@ -393,7 +385,6 @@ def predict_models(feats, cols, precomputed_rule_score=None, precomputed_rule_fl
         "stack_pred": stack_pred, "stack_prob": stack_prob, "meta_n_in": meta_n_in,
     }
 
-# ── SHAP ───────────────────────────────────────────────────────────────────────
 def _shap_vector(shap_values, class_index=1):
     if isinstance(shap_values, list):
         vals = shap_values[class_index] if len(shap_values) > class_index else shap_values[0]
@@ -431,10 +422,7 @@ def get_shap_top(model, X_arr, feature_names, top_n=5):
     return result
 
 def get_phishing_risk_direction(feature_name, feature_value):
-    # Setiap fitur punya dua sisi: kondisi phishing dan kondisi benign
-    # Format: (cek_phishing, alasan_phishing, cek_benign, alasan_benign)
     feature_rules = {
-        # ── URL structure ──────────────────────────────────────────────────────
         "ip":                    (lambda v: v==1,  "Menggunakan IP address langsung sebagai domain (bukan nama domain)",
                                   lambda v: v==0,  "Menggunakan nama domain, bukan IP address"),
         "nb_at":                 (lambda v: v>=1,  "Ada simbol @ dalam URL — umum dipakai untuk menyamarkan domain asli",
@@ -499,21 +487,16 @@ def get_phishing_risk_direction(feature_name, feature_value):
                                   lambda v: v==0,  "Subdomain normal"),
         "path_extension":        (lambda v: v==1,  "File di path punya ekstensi tertentu — bisa mengunduh file berbahaya",
                                   lambda v: v==0,  "Tidak ada ekstensi file mencurigakan di path"),
-        "phish_hints":           (lambda v: v>0,   f"URL mengandung kata kunci phishing seperti 'login', 'verify', 'secure', 'account' (ditemukan {int(feature_value)} kata)",
+        "phish_hints":           (lambda v: v>0,   "URL mengandung kata kunci phishing seperti 'login', 'verify', 'secure', 'account'",
                                   lambda v: v==0,  "Tidak ada kata kunci phishing dalam URL"),
-        # ── Brand/identity ────────────────────────────────────────────────────
         "domain_in_brand":       (lambda v: v==0,  "Domain tidak dikenali sebagai brand terkenal",
                                   lambda v: v==1,  "Domain dikenali sebagai brand besar yang terpercaya"),
         "brand_in_subdomain":    (lambda v: v==1,  "Nama brand besar (Google, PayPal, dll) muncul di subdomain — taktik phishing umum",
                                   lambda v: v==0,  "Tidak ada penyalahgunaan nama brand di subdomain"),
         "brand_in_path":         (lambda v: v==1,  "Nama brand besar muncul di path URL — bisa jadi upaya meniru halaman brand tersebut",
                                   lambda v: v==0,  "Tidak ada nama brand di path"),
-        # nb_www: nilai 1 hanya berarti ada string "www" di hostname.
-        # Untuk domain phishing seperti linkedin-notification-center.com, ini tidak relevan sbg benign.
-        # Dampaknya sepenuhnya tergantung konteks SHAP.
-        "nb_www":                (lambda v: False, "",
-                                  lambda v: False, ""),
-        # ── Web content features ──────────────────────────────────────────────
+        "nb_www":                (lambda v: v==0,  "Tidak menggunakan sub-domain www standar",
+                                  lambda v: v==1,  "Menggunakan sub-domain www standar"),
         "login_form":            (lambda v: v==1,  "Halaman memiliki form login — terutama mencurigakan bila domain tidak dikenal",
                                   lambda v: v==0,  "Tidak ada form login mencurigakan di halaman"),
         "external_favicon":      (lambda v: v==1,  "Favicon (ikon tab) dimuat dari domain lain — tanda situs meniru tampilan brand lain",
@@ -528,9 +511,9 @@ def get_phishing_risk_direction(feature_name, feature_value):
                                   lambda v: v==0,  "Klik kanan berfungsi normal"),
         "empty_title":           (lambda v: v==1,  "Halaman tidak memiliki judul (title kosong) — indikasi halaman dibuat terburu-buru",
                                   lambda v: v==0,  "Halaman memiliki judul yang normal"),
-        "domain_in_title":       (lambda v: v==0,  "Judul halaman tidak menyebut domain situs ini",
+        "domain_in_title":       (lambda v: v==0,  "Nama domain tidak tercantum di judul halaman",
                                   lambda v: v==1,  "Judul halaman mencantumkan nama domain — tanda situs yang konsisten"),
-        "domain_with_copyright": (lambda v: v==0,  "Tidak ada klaim copyright yang menyebut domain ini",
+        "domain_with_copyright": (lambda v: v==0,  "Tidak ada pernyataan hak cipta domain resmi",
                                   lambda v: v==1,  "Ada pernyataan copyright dengan nama domain — tanda situs resmi"),
         "ratio_extHyperlinks":   (lambda v: v>0.5, "Lebih dari setengah link mengarah ke domain lain — konten hampir semua dari luar",
                                   lambda v: v<0.2, "Sebagian besar link mengarah ke domain sendiri"),
@@ -546,20 +529,19 @@ def get_phishing_risk_direction(feature_name, feature_value):
                                   lambda v: v==0,  "Tidak ada CSS dari domain luar"),
         "ratio_extMedia":        (lambda v: v>50,  "Lebih dari setengah media (gambar, video) dari domain lain",
                                   lambda v: v<20,  "Sebagian besar media dihosting di domain sendiri"),
-        # ── External signals ──────────────────────────────────────────────────
         "page_rank":             (lambda v: v<1.0, "PageRank sangat rendah — situs belum dikenal mesin pencari",
                                   lambda v: v>=4.0,"PageRank tinggi — situs sudah dikenal dan terpercaya"),
         "google_index":          (lambda v: v==0,  "Situs tidak terindeks Google — baru dibuat atau sengaja disembunyikan",
                                   lambda v: v==1,  "Situs sudah terindeks Google — menandakan keberadaan yang legitimate"),
-        "web_traffic":           (lambda v: v<100, "Traffic sangat rendah — situs hampir tidak dikenal",
-                                  lambda v: v>10000,"Traffic tinggi — situs populer dan sudah dikenal luas"),
+        "web_traffic":           (lambda v: 0 < v < 100, "Traffic sangat rendah berdasarkan data API — situs hampir tidak dikenal",
+                                  lambda v: v>10000, "Traffic tinggi — situs populer dan sudah dikenal luas"),
         "dns_record":            (lambda v: v==0,  "Tidak punya DNS record valid — sangat mencurigakan",
                                   lambda v: v==1,  "DNS record valid"),
-        "domain_age":            (lambda v: v<30,  "Domain sangat baru (< 30 hari) — situs phishing sering pakai domain baru",
+        "domain_age":            (lambda v: 0 < v < 30,  "Domain sangat baru (< 30 hari) — situs phishing sering pakai domain baru",
                                   lambda v: v>365, "Domain sudah lama terdaftar (> 1 tahun) — indikasi situs terpercaya"),
-        "domain_registration_length": (lambda v: v<180, "Masa registrasi domain sangat singkat — situs phishing jarang registrasi jangka panjang",
+        "domain_registration_length": (lambda v: 0 < v < 180, "Masa registrasi domain sangat singkat — situs phishing jarang registrasi jangka panjang",
                                         lambda v: v>720, "Domain diregistrasi untuk jangka panjang — menandakan komitmen situs resmi"),
-        "whois_registered_domain": (lambda v: v==0, "Data WHOIS tidak tersedia atau domain tidak terdaftar resmi",
+        "whois_registered_domain": (lambda v: v==0, "Data registrasi domain WHOIS tidak ditemukan",
                                      lambda v: v==1, "Data WHOIS tersedia — domain terdaftar secara resmi"),
         "statistical_report":    (lambda v: v==1,  "Terdeteksi oleh laporan statistik keamanan — pola URL mencurigakan secara kumulatif",
                                   lambda v: v==0,  "Tidak memenuhi threshold laporan statistik keamanan"),
@@ -572,109 +554,36 @@ def get_phishing_risk_direction(feature_name, feature_value):
         if benign_fn(feature_value) and benign_reason:
             return "BENIGN", benign_reason
 
-    # Fallback untuk fitur binary: nilai 0 = absen indikator buruk
-    zero_is_benign = {"ip","nb_at","suspicious_tld","port","shortening_service","random_domain",
-                      "nb_tilde","nb_semicolumn","nb_star","nb_comma","nb_dollar","http_in_path",
-                      "punycode","abnormal_subdomain","iframe","popup_window","onmouseover",
-                      "right_clic","empty_title","login_form","external_favicon"}
-    if feature_value == 0 and feature_name in zero_is_benign:
-        return "BENIGN", f"Tidak ada indikator buruk ({feature_name.replace('_',' ')} = 0)"
+    return "NEUTRAL", "Nilai fitur tidak memenuhi kondisi ekstrem phishing maupun benign secara definitif"
 
-    # Fallback terakhir: coba tebak dari nilai dan nama fitur
-    if isinstance(feature_value, (int, float)):
-        if feature_name.startswith("nb_") and feature_value == 0:
-            return "BENIGN", f"Tidak ada {feature_name.replace('nb_','').replace('_',' ')} dalam URL"
-        if feature_name.startswith("ratio_") and feature_value == 0.0:
-            return "BENIGN", f"Rasio {feature_name.replace('ratio_','').replace('_',' ')} = 0"
-
-    return "NEUTRAL", "Nilai fitur tidak memenuhi kondisi phishing maupun benign secara definitif"
-
-# ── LLM prompt builder ─────────────────────────────────────────────────────────
-def build_llm_prompt(url, category, p_phish, model_main, shap_items):
-    FEATURE_LABEL = {
-        "page_rank":                  "reputasi domain di mesin pencari (PageRank)",
-        "google_index":               "apakah situs terindeks oleh Google",
-        "web_traffic":                "jumlah perkiraan pengunjung situs",
-        "dns_record":                 "keberadaan DNS record yang valid",
-        "domain_age":                 "usia domain sejak pertama kali didaftarkan (hari)",
-        "domain_registration_length": "masa registrasi domain (hari)",
-        "whois_registered_domain":    "status registrasi domain di WHOIS",
-        "nb_hyperlinks":              "jumlah total link di halaman",
-        "ratio_intHyperlinks":        "proporsi link yang mengarah ke domain sendiri",
-        "ratio_extHyperlinks":        "proporsi link yang mengarah ke domain lain",
-        "nb_extCSS":                  "jumlah file CSS dari domain eksternal",
-        "ratio_extRedirection":       "proporsi link dengan redirect ke luar",
-        "login_form":                 "keberadaan form login di halaman",
-        "external_favicon":           "apakah ikon tab dimuat dari domain lain (meniru brand)",
-        "links_in_tags":              "proporsi resource (script/CSS) dari domain luar",
-        "ratio_intMedia":             "proporsi gambar/media dari domain sendiri",
-        "ratio_extMedia":             "proporsi gambar/media dari domain luar",
-        "iframe":                     "keberadaan iframe tersembunyi di halaman",
-        "popup_window":               "apakah halaman membuka popup otomatis",
-        "safe_anchor":                "proporsi link yang tidak mengarah ke mana-mana (#, javascript:)",
-        "onmouseover":                "manipulasi URL saat kursor hover di atas link",
-        "right_clic":                 "apakah klik kanan dinonaktifkan",
-        "empty_title":                "apakah halaman tidak memiliki judul (title kosong)",
-        "domain_in_title":            "apakah judul halaman menyebutkan nama domain",
-        "domain_with_copyright":      "apakah ada klaim copyright dengan nama domain",
-        "nb_www":                     "apakah hostname mengandung string 'www'",
-        "domain_in_brand":            "apakah domain dikenali sebagai brand besar terpercaya",
-        "brand_in_subdomain":         "apakah nama brand besar muncul di subdomain (taktik peniruan)",
-        "brand_in_path":              "apakah nama brand besar muncul di path URL",
-        "suspicious_tld":             "apakah ekstensi domain termasuk TLD berisiko tinggi (.xyz, .tk, dll)",
-        "ip":                         "apakah domain menggunakan alamat IP langsung",
-        "phish_hints":                "jumlah kata kunci phishing dalam URL (login, verify, secure, dll)",
-        "nb_at":                      "jumlah simbol @ dalam URL",
-        "random_domain":              "apakah nama domain terlihat acak/tidak bermakna",
-        "shortening_service":         "apakah URL menggunakan layanan pemendek URL",
-        "length_url":                 "total panjang URL (karakter)",
-        "length_hostname":            "panjang hostname dalam URL",
-        "ratio_digits_url":           "proporsi karakter angka dalam URL",
-        "nb_subdomains":              "jumlah tingkat subdomain",
-        "prefix_suffix":              "apakah nama domain mengandung tanda hubung (-)",
-        "nb_redirection":             "jumlah redirect berantai dalam URL",
-        "nb_hyphens":                 "jumlah tanda hubung (-) di seluruh URL",
-        "nb_dots":                    "jumlah titik (.) di URL",
-        "http_in_path":               "apakah teks 'http' muncul di path URL (URL-in-URL)",
-        "https_token":                "apakah kata 'https' muncul di path (bukan di protokol)",
-        "port":                       "apakah URL menggunakan port tidak standar",
-        "punycode":                   "apakah domain menggunakan encoding punycode (xn--)",
-        "statistical_report":         "apakah URL memenuhi pola statistik domain mencurigakan",
-        "nb_external_redirection":    "jumlah redirect ke domain eksternal berbeda",
-    }
-
-    # Tentukan nilai kontekstual nb_www
-    nb_www_val = next((f.get("value") for f in shap_items if f["name"] == "nb_www"), None)
-    if nb_www_val is not None:
-        # Cek apakah ada indikator lain yang mencurigakan dari URL
-        phishing_features = {f["name"] for f in shap_items if f.get("shap_signed", 0) > 0}
-        if nb_www_val == 1 and len(phishing_features) > 1:
-            FEATURE_LABEL["nb_www"] = "kehadiran string 'www' di hostname (dalam konteks ini tidak cukup menjadi bukti keamanan karena banyak indikator phishing lain yang kuat)"
-
+# ── Perbaikan Prompt Builder (Strict Context & Anti Malu-maluin) ──────────────────
+def build_llm_prompt(url, category, p_phish, model_main, top_features_with_reasons):
     lines = []
-    for i, f in enumerate(shap_items, 1):
-        label = FEATURE_LABEL.get(f["name"], f["name"].replace("_"," "))
-        value_str = f", nilai={f.get('value', '?')}"
-        direction = "mendorong ke PHISHING" if f["shap_signed"] > 0 else "mendorong ke BENIGN"
-        lines.append(f"  {i}. {label}{value_str} | SHAP={f['shap_signed']:+.4f} → {direction}")
-    shap_block = "\n".join(lines) if lines else "  (data SHAP tidak tersedia)"
+    for i, f in enumerate(top_features_with_reasons, 1):
+        lines.append(f"  {i}. Fitur: {f['display_name']} | Status: {f['impact']} | Hasil Ekstraksi: {f['reason']}")
+    
+    features_block = "\n".join(lines) if lines else "  (Data fitur tidak tersedia)"
 
     return (
-        f"Kamu adalah analis keamanan siber. Tulis penjelasan 3-4 kalimat "
-        f"dalam bahasa Indonesia mengapa URL berikut diklasifikasikan sebagai {category.upper()} "
-        f"(probabilitas phishing = {p_phish:.2f}, threshold = {FINAL_THRESHOLD}).\n\n"
-        f"URL: {url}\n"
-        f"Model: {model_main}\n\n"
-        f"Data SHAP (fitur paling berpengaruh):\n{shap_block}\n\n"
-        f"Petunjuk penting:\n"
-        f"- Fokus pada fitur dengan SHAP absolut terbesar sebagai alasan utama\n"
-        f"- Gunakan bahasa natural, jangan sebut nama variabel teknis (misal: jangan bilang 'nb_www', tapi jelaskan maknanya)\n"
-        f"- Jika fitur 'www' muncul di tengah banyak indikator phishing lain, jangan jadikan itu alasan utama keamanan\n"
-        f"- Jelaskan secara jujur mengapa kombinasi fitur ini mendukung kesimpulan {category.upper()}\n"
-        f"- Akhiri dengan: REKOMENDASI: BLOKIR atau REKOMENDASI: IZINKAN."
+        f"Kamu adalah analis keamanan siber profesional. Tugasmu adalah menulis penjelasan ringkas (3-4 kalimat) "
+        f"dalam Bahasa Indonesia mengenai hasil deteksi sistem terhadap URL berikut.\n\n"
+        f"HASIL DETEKSI SISTEM (WAJIB DIIKUTI):\n"
+        f"- URL yang diperiksa: {url}\n"
+        f"- Kesimpulan Akhir: {category.upper()}\n"
+        f"- Probabilitas Phishing: {p_phish:.2f} (Threshold Bahaya >= {FINAL_THRESHOLD})\n"
+        f"- Model Utama: {model_main}\n\n"
+        f"DATA INTEGRITAS FITUR (JANGAN DIUBAH ATAU DIPUTARBALIKKAN):\n"
+        f"{features_block}\n\n"
+        f"PETUNJUK PENULISAN PENJELASAN:\n"
+        f"1. Kamu HARUS RECONCILE (menyelaraskan) mengapa skor bisa bernilai {p_phish:.2f} meskipun ada fitur yang berstatus BENIGN. "
+        f"   (Misal: 'Meskipun secara reputasi situs ini sudah terindeks Google dan memiliki PageRank baik, namun model mendeteksi adanya anomali pada...').\n"
+        f"2. JANGAN PERNAH membalikkan fakta data! Jika data di atas menyatakan 'Status: BENIGN | Hasil Ekstraksi: Situs sudah terindeks Google', "
+        f"   KAMU DILARANG KERAS menulis bahwa situs tidak terindeks!\n"
+        f"3. Jika situs valid seperti 'numpy.org' tidak memakai 'www', jelaskan itu secara netral sebagai variasi domain modern tanpa menuduhnya berbahaya.\n"
+        f"4. Gunakan bahasa natural mengalir, hindari istilah variabel teknis kaku.\n"
+        f"5. Akhiri kalimat penutup wajib dengan format: REKOMENDASI: BLOKIR atau REKOMENDASI: IZINKAN."
     )
 
-#  Safe LLM Non-blocking Worker (Saran Review) 
 def fetch_llm_reasoning_safe(prompt):
     try:
         return get_llm_reasoning(prompt)
@@ -707,36 +616,47 @@ def generate_explanation(url, feats_full, cols, rf_prob, xgb_prob, stack_prob,
     feat_array = np.array([[feats_full.get(c,0.0) for c in cols]], dtype=float)
     shap_items = []
     if active_model is not None:
-        shap_items = get_shap_top(active_model, feat_array, cols, top_n=5)
+        shap_items = get_shap_top(active_model, feat_array, cols, top_n=len(cols)) 
         if not shap_items:
             other = xgb_model if active_model is rf_model else rf_model
             if other is not None:
-                shap_items = get_shap_top(other, feat_array, cols, top_n=5)
+                shap_items = get_shap_top(other, feat_array, cols, top_n=len(cols))
 
     shap_items = [
         {**f, "value": feats_full.get(f["name"], 0)}
         for f in shap_items
     ]
 
-    prompt = build_llm_prompt(url, category, p_phish, model_main, shap_items)
+    FEATURE_LABEL_MAP = {
+        "page_rank": "PageRank Mesin Pencari", "google_index": "Indeks Google", 
+        "web_traffic": "Trafik Web", "length_hostname": "Panjang Hostname", "nb_www": "Subdomain WWW",
+        "nb_hyperlinks": "Jumlah Tautan Halaman"
+    }
 
+    top_features_reasons = []
     top_features = []
     for f in shap_items:
         feat_val = feats_full.get(f["name"], 0)
         rule_dir, reason = get_phishing_risk_direction(f["name"], feat_val)
         display_impact = rule_dir if rule_dir != "NEUTRAL" else f["direction"]
+        
+        top_features_reasons.append({
+            "display_name": FEATURE_LABEL_MAP.get(f["name"], f["name"].replace("_", " ")),
+            "impact": display_impact,
+            "reason": reason
+        })
+        
         top_features.append({
             "name": f["name"], "value": feat_val, "impact": display_impact, "reason": reason,
             "shap_value": f["shap_signed"], "shap_value_signed": f["shap_signed"],
             "abs_shap": f["abs_shap"], "shap_direction": f["direction"],
         })
 
-    # [SARAN REVIEW] Mengirim prompt ke thread pool executor agar non-blocking
-    prompt = build_llm_prompt(url, category, p_phish, model_main, shap_items)
+    prompt = build_llm_prompt(url, category, p_phish, model_main, top_features_reasons)
     future = executor.submit(fetch_llm_reasoning_safe, prompt)
     
     try:
-        llm_reasoning = future.result(timeout=20)
+        llm_reasoning = future.result(timeout=15)
     except Exception:
         llm_reasoning = f"Situs secara dominan terdeteksi sebagai {category.upper()} oleh {model_main} dengan keyakinan {p_phish*100:.1f}%."
 
@@ -745,23 +665,64 @@ def generate_explanation(url, feats_full, cols, rf_prob, xgb_prob, stack_prob,
         "phishing_probability": round(p_phish, 4), "llm_reasoning": llm_reasoning, "shap_items": shap_items,
     }
 
-# Logging
 def log_feature_extraction(url, mode, feats, feature_columns_81, status):
+    csv_path = LOG_PATH
+    write_header = not os.path.exists(csv_path)
+    
+    # 1. Hitung Nomor Urut (NO) Secara Otomatis Berdasarkan Baris Terakhir
+    no = 1
+    if os.path.exists(csv_path):
+        try:
+            with open(csv_path, mode="r", encoding="utf-8-sig") as f:
+                lines = f.readlines()
+                # Baris 1: sep=;, Baris 2: Header, Baris 3: Data Pertama
+                if len(lines) >= 3: 
+                    last_line = lines[-1].strip().split(";")
+                    if last_line[0].isdigit():
+                        no = int(last_line[0]) + 1
+        except:
+            no = 1
+
+    # 2. Definisikan Urutan Kolom Secara Baku (TOP_FEATURE Tanpa S Sesuai Excel)
+    headers = ["NO", "URL", "MODE", "STATUS"] + feature_columns_81 + ["EXPLANATION", "TOP_FEATURE", "LLM_REASONING"]
+
+    # 3. Susun Data ke Dalam Dictionary
+    row_dict = {"NO": no, "URL": url, "MODE": mode, "STATUS": status}
+    for feat in feature_columns_81:
+        val = feats.get(feat, 0.0)
+        if isinstance(val, (list, dict, tuple)):
+            row_dict[feat] = str(val)
+        elif val is None:
+            row_dict[feat] = 0.0
+        else:
+            row_dict[feat] = val
+
+    # Bersihkan teks panjang dari karakter line-break agar tidak menjebol baris Excel ke bawah
+    MAX_CELL = 32000
+    row_dict["EXPLANATION"]  = str(feats.get("_explanation","")).replace("\n", " ").replace("\r", " ")[:MAX_CELL]
+    row_dict["TOP_FEATURE"]  = str(feats.get("_top_features","")).replace("\n", "  |  ").replace("\r", " ")[:MAX_CELL]
+    row_dict["LLM_REASONING"]= str(feats.get("_llm_reasoning","")).replace("\n", " ").replace("\r", " ")[:MAX_CELL]
+
+    # 4. Tulis ke File Menggunakan Engine CSV Writer Bawaan (Anti-Corrupt)
     try:
-        df_old = pd.read_excel(LOG_PATH, engine="openpyxl") if os.path.exists(LOG_PATH) else None
-        no = int(df_old["NO"].max()) + 1 if df_old is not None else 1
-    except: df_old = None; no = 1
-    row = {"NO": no, "URL": url, "MODE": mode, "STATUS": status}
-    for feat in feature_columns_81: row[feat] = feats.get(feat, 0.0)
-    row["EXPLANATION"] = feats.get("_explanation","")
-    row["TOP_FEATURES"] = feats.get("_top_features","")
-    row["LLM_REASONING"] = feats.get("_llm_reasoning","")
-    row_df = pd.DataFrame([row])
-    if df_old is None:
-        row_df.to_excel(LOG_PATH, index=False)
-    else:
-        with pd.ExcelWriter(LOG_PATH, mode="a", engine="openpyxl", if_sheet_exists="overlay") as w:
-            row_df.to_excel(w, index=False, header=False, startrow=len(df_old)+1)
+        import csv
+        
+        if write_header:
+            # Jika file baru dibuat, tulis instruksi sep=; dan Header Kolom
+            with open(csv_path, mode="w", newline="", encoding="utf-8-sig") as f:
+                f.write("sep=;\n")
+                writer = csv.DictWriter(f, fieldnames=headers, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+                writer.writeheader()
+                writer.writerow(row_dict)
+        else:
+            # Jika file sudah ada, cukup tambahkan (append) satu baris data baru di paling bawah
+            with open(csv_path, mode="a", newline="", encoding="utf-8-sig") as f:
+                writer = csv.DictWriter(f, fieldnames=headers, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+                writer.writerow(row_dict)
+                
+        print(f"[LOG SUCCESS] Baris #{no} berhasil ditambahkan ke samping dengan struktur rapi!")
+    except Exception as e:
+        print(f"[LOG ERROR] Gagal menulis log dengan metode DictWriter: {e}")
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
 @app.get("/")
@@ -841,44 +802,55 @@ def predict():
                 "risk_score": risk_score, "risk_category": risk_category, "rule_detail": rule_detail, "features_analyzed": len(cols),
             }
 
-        # Simpan ke log Excel — catat SEMUA fitur yang punya dampak signifikan
         log_top_lines = []
         all_shap = exp.get("shap_items", [])
+
         if all_shap:
-            log_top_lines.append("=== TOP SHAP FEATURES ===")
-            for i, f in enumerate(all_shap):
+            log_top_lines.append(" KONTRIBUSI FITUR SHAP")
+            for f in all_shap:
                 feat_val = feats_full.get(f["name"], 0)
-                direction = "→ PHISHING" if f["shap_signed"] > 0 else "→ BENIGN"
-                _, reason = get_phishing_risk_direction(f["name"], feat_val)
+                shap_score = f["shap_signed"]
+                
+                # ── ATURAN FILTER 1: Jika skor SHAP mutlak bulat 0, abaikan dan skip! ──
+                if abs(shap_score) < 0.0001:
+                    continue
+                    
+                # ── ATURAN FILTER 2: Jika nilai fitur kosong/nol DAN tidak punya pengaruh signifikan, skip! ──
+                if (feat_val == 0 or feat_val == 0.0 or feat_val is None) and abs(shap_score) < 0.005:
+                    continue
+
+                # Tentukan label arah dampak secara singkat
+                if shap_score > 0:
+                    arah = "PHISHING"
+                elif shap_score < 0:
+                    arah = "BENIGN"
+                else:
+                    arah = "NETRAL"
+                
+                # Masukkan data dengan format super ringkas tanpa teks narasi
                 log_top_lines.append(
-                    f"{i+1}. {f['name']} | nilai={feat_val} | SHAP={f['shap_signed']:+.4f} {direction} | {reason}"
+                    f"Fitur: {f['name']} | Nilai: {feat_val} | SHAP: {shap_score:+.4f} | Dampak: [{arah}]"
                 )
-        log_top_lines.append("=== SEMUA FITUR BERDAMPAK SIGNIFIKAN ===")
-        phishing_contrib = []
-        benign_contrib = []
-        for feat_name, feat_val in feats_full.items():
-            if feat_name.startswith("_"): continue
-            dir_, reason_ = get_phishing_risk_direction(feat_name, feat_val)
-            if dir_ == "PHISHING":
-                phishing_contrib.append(f"  [PHISHING] {feat_name}={feat_val} | {reason_}")
-            elif dir_ == "BENIGN":
-                benign_contrib.append(f"  [BENIGN]   {feat_name}={feat_val} | {reason_}")
-        if phishing_contrib:
-            log_top_lines.append("-- Mendorong ke PHISHING:")
-            log_top_lines.extend(phishing_contrib)
-        if benign_contrib:
-            log_top_lines.append("-- Mendorong ke BENIGN:")
-            log_top_lines.extend(benign_contrib)
+        else:
+            top_ui = exp.get("top_influential_features", [])
+            if top_ui:
+                log_top_lines.append("KONTRIBUSI FITUR")
+                for f in top_ui:
+                    if f.get('value', 0) != 0:
+                        log_top_lines.append(f"Fitur: {f['name']} | Nilai: {f.get('value',0)} | Dampak: [{f.get('impact','?')}]")
+
+        log_top = "  |  ".join(log_top_lines)
+
         log_top = "\n".join(log_top_lines)
         feats_for_log = dict(feats_full)
         feats_for_log["_explanation"] = exp.get("llm_reasoning","")
         feats_for_log["_top_features"] = log_top
         feats_for_log["_llm_reasoning"] = exp.get("llm_reasoning","")
+        
         log_feature_extraction(url, mode, feats_for_log, FEATURE_COLUMNS_81, category)
 
         return jsonify(resp)
 
-    # ── Routing per decision mode ─────────────────────────────────────────────
     if decision_mode == "rf_only":
         preds = predict_models(feats_full, cols, risk_score, rule_flag, rf, xgb, meta)
         return build_response(clamp01(preds["rf_prob"]), "rf_only", "Random Forest", rf_prob=preds["rf_prob"], rf_model=rf)
@@ -894,7 +866,6 @@ def predict():
         p = clamp01(0.5*(preds["rf_prob"] or 0.0) + 0.5*(preds["xgb_prob"] or 0.0))
         return build_response(p, "ml_rf_xgb_average_only", "RF + XGB Average", preds["rf_prob"], preds["xgb_prob"], rf_model=rf, xgb_model=xgb)
 
-    # hybrid_prefilter
     if use_prefilter and rule_flag == 1:
         p = clamp01(max(PREFILTER_PHISHING_MIN_CONF, risk_score/10.0))
         return build_response(p, "rule_based_prefilter_phishing", "Rule-Based Prefilter", web_used=False)
@@ -910,6 +881,5 @@ def predict():
 def predict_alias(): return predict()
 
 if __name__ == "__main__":
-    # Memanggil cache memori global sekali saat web backend menyala
     init_startup_cache()
     app.run(debug=True, host="0.0.0.0", port=5000)
