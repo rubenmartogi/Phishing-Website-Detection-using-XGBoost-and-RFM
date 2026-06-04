@@ -557,7 +557,7 @@ def get_phishing_risk_direction(feature_name, feature_value):
     return "NEUTRAL", "Nilai fitur tidak memenuhi kondisi ekstrem phishing maupun benign secara definitif"
 
 # ── Perbaikan Prompt Builder (Strict Context & Anti Malu-maluin) ──────────────────
-def build_llm_prompt(url, category, p_phish, model_main, top_features_with_reasons):
+def build_llm_prompt(url, category, p_phish, model_main, top_features_with_reasons, rekomendasi_tetap):
     lines = []
     for i, f in enumerate(top_features_with_reasons, 1):
         lines.append(f"  {i}. Fitur: {f['display_name']} | Status: {f['impact']} | Hasil Ekstraksi: {f['reason']}")
@@ -575,13 +575,9 @@ def build_llm_prompt(url, category, p_phish, model_main, top_features_with_reaso
         f"DATA INTEGRITAS FITUR (JANGAN DIUBAH ATAU DIPUTARBALIKKAN):\n"
         f"{features_block}\n\n"
         f"PETUNJUK PENULISAN PENJELASAN:\n"
-        f"1. Kamu HARUS RECONCILE (menyelaraskan) mengapa skor bisa bernilai {p_phish:.2f} meskipun ada fitur yang berstatus BENIGN. "
-        f"   (Misal: 'Meskipun secara reputasi situs ini sudah terindeks Google dan memiliki PageRank baik, namun model mendeteksi adanya anomali pada...').\n"
-        f"2. JANGAN PERNAH membalikkan fakta data! Jika data di atas menyatakan 'Status: BENIGN | Hasil Ekstraksi: Situs sudah terindeks Google', "
-        f"   KAMU DILARANG KERAS menulis bahwa situs tidak terindeks!\n"
-        f"3. Jika situs valid seperti 'numpy.org' tidak memakai 'www', jelaskan itu secara netral sebagai variasi domain modern tanpa menuduhnya berbahaya.\n"
-        f"4. Gunakan bahasa natural mengalir, hindari istilah variabel teknis kaku.\n"
-        f"5. Akhiri kalimat penutup wajib dengan format: REKOMENDASI: BLOKIR atau REKOMENDASI: IZINKAN."
+        f"1. Jelaskan secara logis mengapa skor bisa bernilai {p_phish:.2f} berdasarkan data fitur di atas.\n"
+        f"2. JANGAN PERNAH mengada-ada atau membawa nama fitur yang tidak tertulis pada data di atas (seperti WHOIS atau copyright jika tidak ada)!\n"
+        f"3. Kamu HARUS mengakhiri kalimat penjelasanmu tepat dengan teks instruksi ini tanpa diubah: {rekomendasi_tetap}"
     )
 
 def fetch_llm_reasoning_safe(prompt):
@@ -652,7 +648,12 @@ def generate_explanation(url, feats_full, cols, rf_prob, xgb_prob, stack_prob,
             "abs_shap": f["abs_shap"], "shap_direction": f["direction"],
         })
 
-    prompt = build_llm_prompt(url, category, p_phish, model_main, top_features_reasons)
+        if final_label == 1:
+            rekomendasi_tetap = "REKOMENDASI: BLOKIR."
+        else:
+            rekomendasi_tetap = "REKOMENDASI: IZINKAN."
+
+    prompt = build_llm_prompt(url, category, p_phish, model_main, top_features_reasons, rekomendasi_tetap)
     future = executor.submit(fetch_llm_reasoning_safe, prompt)
     
     try:
