@@ -451,6 +451,8 @@ def get_shap_top(model, X_arr, feature_names, top_n=5):
     result = []
     for i in top_idx:
         s = float(vals[i])
+        if abs(s) < 1e-4:       # skip fitur yang benar-benar nol kontribusinya
+            continue
         result.append({
             "name": fn[i], "shap_signed": s, "abs_shap": abs(s),
             "direction": "PHISHING" if s > 0 else ("BENIGN" if s < 0 else "NEUTRAL"),
@@ -910,9 +912,11 @@ def predict():
         if all_shap:
             for f in all_shap:
                 shap_score = f["shap_signed"]
-                if abs(shap_score) < 1e-6:
+                feat_val = feats_full.get(f["name"], None)
+
+                if abs(shap_score) < 1e-6 or feat_val is None:
                     continue
-                feat_val = feats_full.get(f["name"], 0)
+
                 arah = "PHISHING" if shap_score > 0 else ("BENIGN" if shap_score < 0 else "NETRAL")
                 log_top_lines.append(
                     f"Fitur: {f['name']} | Nilai: {feat_val} | SHAP: {shap_score:+.4f} | Dampak: [{arah}]"
