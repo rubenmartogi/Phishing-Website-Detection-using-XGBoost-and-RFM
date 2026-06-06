@@ -28,7 +28,7 @@ GA_POP_SIZE = 16
 GA_N_GEN = 8
 GA_CXPB = 0.7
 GA_MUTPB = 0.3
-GA_CV_SPLITS = 3
+GA_CV_SPLITS = 5
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 data_file_path = os.path.join(current_dir, "DataFiles", "data_cleaning.csv")
@@ -98,9 +98,9 @@ def print_metrics(
     y_prob: np.ndarray | None = None,
 ) -> None:
     acc = accuracy_score(y_true, y_pred)
-    prec = precision_score(y_true, y_pred, zero_division="0")
-    rec = recall_score(y_true, y_pred, zero_division="0")
-    f1 = f1_score(y_true, y_pred, zero_division="0")
+    prec = precision_score(y_true, y_pred, zero_division=0)
+    rec = recall_score(y_true, y_pred, zero_division=0)
+    f1 = f1_score(y_true, y_pred, zero_division=0)
     auc = roc_auc_score(y_true, y_prob) if y_prob is not None else np.nan
 
     print(f"\n{name}")
