@@ -734,7 +734,7 @@ def generate_explanation(url, feats_full, cols, rf_prob, xgb_prob, stack_prob,
         "phishing_probability": round(p_phish, 4), "llm_reasoning": llm_reasoning, "shap_items": shap_items,
     }
 
-def log_feature_extraction(url, mode, feats, feature_columns_81, status):
+def log_feature_extraction(url, mode, feats, feature_columns_81, status, decision_source):
     csv_path = LOG_PATH
     write_header = not os.path.exists(csv_path)
     
@@ -753,10 +753,16 @@ def log_feature_extraction(url, mode, feats, feature_columns_81, status):
             no = 1
 
     # 2. Definisikan Urutan Kolom Secara Baku (TOP_FEATURE Tanpa S Sesuai Excel)
-    headers = ["NO", "URL", "MODE", "STATUS", "PHISHING_PROB"] + feature_columns_81 + ["TOP_FEATURE", "LLM_REASONING"]
+    headers = ["NO", "URL", "MODE", "DECISION_SOURCE", "STATUS", "PHISHING_PROB"] + feature_columns_81 + ["TOP_FEATURE", "LLM_REASONING"]
 
     # 3. Susun Data ke Dalam Dictionary
-    row_dict = {"NO": no, "URL": url, "MODE": mode, "STATUS": status}
+    row_dict = {
+        "NO": no,
+        "URL": url,
+        "MODE": mode,
+        "DECISION_SOURCE": decision_source,
+        "STATUS": status,
+    }
     for feat in feature_columns_81:
         val = feats.get(feat, 0.0)
         if isinstance(val, (list, dict, tuple)):
@@ -925,7 +931,7 @@ def predict():
         feats_for_log["_top_features"]  = log_top
         feats_for_log["_llm_reasoning"] = exp.get("llm_reasoning", "")
         
-        log_err = log_feature_extraction(url, mode, feats_for_log, FEATURE_COLUMNS_81, category)
+        log_err = log_feature_extraction(url, mode, feats_for_log, FEATURE_COLUMNS_81, category, decision_source)
         if log_err:
             resp["log_warning"] = log_err
 
