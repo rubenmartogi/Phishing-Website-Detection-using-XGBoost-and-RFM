@@ -13,6 +13,7 @@ import pandas as pd
 import requests
 import shap
 import tldextract
+import platform
 from dotenv import load_dotenv
 load_dotenv()
 from external_features import enrich_external_features
@@ -55,6 +56,41 @@ app = Flask(__name__, static_folder=os.path.join(BASE_DIR, "static"))
 
 # Menggunakan ekstensi CSV murni untuk stabilitas penuh saat dibaca Microsoft Excel
 LOG_PATH = os.path.join(BASE_DIR, "log_feature_extraction.csv")
+
+def check_log_locked():
+    if not os.path.exists(LOG_PATH):
+        return False, ""
+
+    try:
+        fh = open(LOG_PATH, "a", newline="", encoding="utf-8-sig")
+    except (PermissionError, OSError):
+        return True, (
+            "File log (log_feature_extraction.csv) sedang terbuka di Excel atau program lain. "
+            "Tutup file tersebut terlebih dahulu, lalu ulangi deteksi."
+        )
+    except Exception:
+        return False, ""
+
+    try:
+        if platform.system() == "Windows":
+            import msvcrt
+            msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            try:
+                import fcntl  # type: ignore[import]
+            except ImportError:
+                return False, ""
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(fh, fcntl.LOCK_UN)
+        return False, ""
+    except (OSError, PermissionError):
+        return True, (
+            "File log (log_feature_extraction.csv) sedang terbuka di Excel atau program lain. "
+            "Tutup file tersebut terlebih dahulu, lalu ulangi deteksi."
+        )
+    finally:
+        fh.close()
 
 executor = ThreadPoolExecutor(max_workers=4)
 GLOBAL_MODELS = {}
@@ -431,7 +467,7 @@ def get_phishing_risk_direction(feature_name, feature_value):
                                   lambda v: v==0,  "Tidak ada underscore mencurigakan dalam URL"),
         "nb_percent":            (lambda v: v>5,   "Banyak karakter ter-encode (%xx) — tanda URL obfuskasi",
                                   lambda v: v==0,  "Tidak ada encoding mencurigakan dalam URL"),
-        "nb_tilde":              (lambda v: v>=1,  "Karakter ~ dalam URL — jarang dipakai situs legitimate",
+        "nb_tilde":              (lambda v: v>=1,  "Karakter ~ dalam URL — jarang dipakai situs benign",
                                   lambda v: v==0,  "Tidak ada karakter tilde mencurigakan"),
         "nb_semicolumn":         (lambda v: v>=1,  "Karakter ; dalam URL — bisa dipakai untuk menyisipkan parameter palsu",
                                   lambda v: v==0,  "Tidak ada semicolons mencurigakan"),
@@ -532,7 +568,7 @@ def get_phishing_risk_direction(feature_name, feature_value):
         "page_rank":             (lambda v: v<1.0, "PageRank sangat rendah — situs belum dikenal mesin pencari",
                                   lambda v: v>=4.0,"PageRank tinggi — situs sudah dikenal dan terpercaya"),
         "google_index":          (lambda v: v==0,  "Situs tidak terindeks Google — baru dibuat atau sengaja disembunyikan",
-                                  lambda v: v==1,  "Situs sudah terindeks Google — menandakan keberadaan yang legitimate"),
+                                  lambda v: v==1,  "Situs sudah terindeks Google — menandakan keberadaan yang benign"),
         "web_traffic":           (lambda v: 0 < v < 100, "Traffic sangat rendah berdasarkan data API — situs hampir tidak dikenal",
                                   lambda v: v>10000, "Traffic tinggi — situs populer dan sudah dikenal luas"),
         "dns_record":            (lambda v: v==0,  "Tidak punya DNS record valid — sangat mencurigakan",
@@ -576,8 +612,11 @@ def build_llm_prompt(url, category, p_phish, model_main, top_features_with_reaso
         f"{features_block}\n\n"
         f"PETUNJUK PENULISAN PENJELASAN:\n"
         f"1. Jelaskan secara logis mengapa skor bisa bernilai {p_phish:.2f} berdasarkan data fitur di atas.\n"
-        f"2. JANGAN PERNAH mengada-ada atau membawa nama fitur yang tidak tertulis pada data di atas (seperti WHOIS atau copyright jika tidak ada)!\n"
-        f"3. Kamu HARUS mengakhiri kalimat penjelasanmu tepat dengan teks instruksi ini tanpa diubah: {rekomendasi_tetap}"
+        f"2. Fokuskan penjelasan pada dukungan untuk Kesimpulan Akhir: jika hasilnya BENIGN, jelaskan bahwa fitur utama mendukung benign; "
+        f"jika hasilnya PHISHING, jelaskan bahwa fitur utama mendukung phishing.\n"
+        f"3. Jangan menggunakan kalimat yang meragukan kesimpulan akhir. Tulis dengan tegas sesuai hasil deteksi.\n"
+        f"4. JANGAN PERNAH mengada-ada atau membawa nama fitur yang tidak tertulis pada data di atas!\n"
+        f"5. Kamu HARUS mengakhiri kalimat penjelasanmu tepat dengan teks instruksi ini tanpa diubah: {rekomendasi_tetap}"
     )
 
 def fetch_llm_reasoning_safe(prompt):
@@ -629,29 +668,58 @@ def generate_explanation(url, feats_full, cols, rf_prob, xgb_prob, stack_prob,
         "nb_hyperlinks": "Jumlah Tautan Halaman"
     }
 
+    # Fitur web-content yang nilainya 0 karena API gagal bukan berarti kondisi nyata 0.
+    # SHAP sudah memperhitungkan nilai ini dari konteks training — percayai SHAP.
+    WEB_FETCH_DEPENDENT = {
+        "google_index", "page_rank", "web_traffic", "dns_record",
+        "domain_age", "domain_registration_length", "whois_registered_domain",
+        "nb_hyperlinks", "ratio_intHyperlinks", "ratio_extHyperlinks",
+        "nb_extCSS", "ratio_extRedirection", "login_form", "external_favicon",
+        "links_in_tags", "ratio_intMedia", "ratio_extMedia",
+    }
+
+    rekomendasi_tetap = "REKOMENDASI: BLOKIR." if final_label == 1 else "REKOMENDASI: IZINKAN."
+
     top_features_reasons = []
     top_features = []
     for f in shap_items:
         feat_val = feats_full.get(f["name"], 0)
         rule_dir, reason = get_phishing_risk_direction(f["name"], feat_val)
-        display_impact = rule_dir if rule_dir != "NEUTRAL" else f["direction"]
-        
+        shap_dir = f["direction"]
+
+        # Prioritas: SHAP (kebenaran matematis model)
+        # Rule hanya tiebreaker jika SHAP nyaris nol
+        if abs(f["shap_signed"]) < 1e-6:
+            display_impact = rule_dir if rule_dir != "NEUTRAL" else shap_dir
+        elif f["name"] in WEB_FETCH_DEPENDENT and feat_val == 0:
+            # Nilai 0 karena API gagal → percayai arah SHAP
+            display_impact = shap_dir
+            if shap_dir == "BENIGN":
+                reason = "Berdasarkan analisis model, fitur ini berkontribusi pada keamanan URL"
+            elif shap_dir == "PHISHING":
+                reason = "Berdasarkan analisis model, fitur ini menambah risiko phishing"
+            else:
+                reason = "Tidak ada dampak signifikan dari fitur ini"
+        elif rule_dir == shap_dir or (rule_dir != "NEUTRAL" and shap_dir == "NEUTRAL"):
+            display_impact = rule_dir  # sepakat atau rule punya pendapat, SHAP netral
+        else:
+            # SHAP dan rule tidak sepakat → percayai SHAP, perbarui reason
+            display_impact = shap_dir
+            if shap_dir == "BENIGN":
+                reason = "Analisis model: fitur ini mendukung keamanan URL"
+            elif shap_dir == "PHISHING":
+                reason = "Analisis model: fitur ini menambah indikasi phishing"
+
         top_features_reasons.append({
             "display_name": FEATURE_LABEL_MAP.get(f["name"], f["name"].replace("_", " ")),
             "impact": display_impact,
             "reason": reason
         })
-        
         top_features.append({
             "name": f["name"], "value": feat_val, "impact": display_impact, "reason": reason,
             "shap_value": f["shap_signed"], "shap_value_signed": f["shap_signed"],
-            "abs_shap": f["abs_shap"], "shap_direction": f["direction"],
+            "abs_shap": f["abs_shap"], "shap_direction": shap_dir,
         })
-
-        if final_label == 1:
-            rekomendasi_tetap = "REKOMENDASI: BLOKIR."
-        else:
-            rekomendasi_tetap = "REKOMENDASI: IZINKAN."
 
     prompt = build_llm_prompt(url, category, p_phish, model_main, top_features_reasons, rekomendasi_tetap)
     future = executor.submit(fetch_llm_reasoning_safe, prompt)
@@ -685,7 +753,7 @@ def log_feature_extraction(url, mode, feats, feature_columns_81, status):
             no = 1
 
     # 2. Definisikan Urutan Kolom Secara Baku (TOP_FEATURE Tanpa S Sesuai Excel)
-    headers = ["NO", "URL", "MODE", "STATUS"] + feature_columns_81 + ["EXPLANATION", "TOP_FEATURE", "LLM_REASONING"]
+    headers = ["NO", "URL", "MODE", "STATUS", "PHISHING_PROB"] + feature_columns_81 + ["TOP_FEATURE", "LLM_REASONING"]
 
     # 3. Susun Data ke Dalam Dictionary
     row_dict = {"NO": no, "URL": url, "MODE": mode, "STATUS": status}
@@ -698,32 +766,52 @@ def log_feature_extraction(url, mode, feats, feature_columns_81, status):
         else:
             row_dict[feat] = val
 
-    # Bersihkan teks panjang dari karakter line-break agar tidak menjebol baris Excel ke bawah
     MAX_CELL = 32000
-    row_dict["EXPLANATION"]  = str(feats.get("_explanation","")).replace("\n", " ").replace("\r", " ")[:MAX_CELL]
-    row_dict["TOP_FEATURE"]  = str(feats.get("_top_features","")).replace("\n", "  |  ").replace("\r", " ")[:MAX_CELL]
-    row_dict["LLM_REASONING"]= str(feats.get("_llm_reasoning","")).replace("\n", " ").replace("\r", " ")[:MAX_CELL]
+    row_dict["PHISHING_PROB"] = feats.get("_phishing_prob", "")
+    row_dict["TOP_FEATURE"]   = str(feats.get("_top_features","")).replace("\n", "  ||  ").replace("\r", " ")[:MAX_CELL]
+    row_dict["LLM_REASONING"] = str(feats.get("_llm_reasoning","")).replace("\n", " ").replace("\r", " ")[:MAX_CELL]
 
-    # 4. Tulis ke File Menggunakan Engine CSV Writer Bawaan (Anti-Corrupt)
+    # Tulis ke CSV — deteksi jika file sedang terkunci (dibuka di Excel)
+    import csv
+
+    def _try_open_exclusive(path, mode):
+        """Buka file secara eksklusif. Raise PermissionError jika terkunci."""
+        import sys
+        fh = open(path, mode, newline="", encoding="utf-8-sig")
+        try:
+            if sys.platform == "win32":
+                import msvcrt
+                msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (OSError, PermissionError):
+            fh.close()
+            raise PermissionError("FILE_LOCKED")
+        return fh
+
     try:
-        import csv
-        
         if write_header:
-            # Jika file baru dibuat, tulis instruksi sep=; dan Header Kolom
-            with open(csv_path, mode="w", newline="", encoding="utf-8-sig") as f:
-                f.write("sep=;\n")
-                writer = csv.DictWriter(f, fieldnames=headers, delimiter=";", quoting=csv.QUOTE_MINIMAL)
-                writer.writeheader()
-                writer.writerow(row_dict)
+            fh = _try_open_exclusive(csv_path, "w")
+            fh.write("sep=;\n")
+            writer = csv.DictWriter(fh, fieldnames=headers, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+            writer.writeheader()
+            writer.writerow(row_dict)
+            fh.close()
         else:
-            # Jika file sudah ada, cukup tambahkan (append) satu baris data baru di paling bawah
-            with open(csv_path, mode="a", newline="", encoding="utf-8-sig") as f:
-                writer = csv.DictWriter(f, fieldnames=headers, delimiter=";", quoting=csv.QUOTE_MINIMAL)
-                writer.writerow(row_dict)
-                
-        print(f"[LOG SUCCESS] Baris #{no} berhasil ditambahkan ke samping dengan struktur rapi!")
+            fh = _try_open_exclusive(csv_path, "a")
+            writer = csv.DictWriter(fh, fieldnames=headers, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+            writer.writerow(row_dict)
+            fh.close()
+        print(f"[LOG SUCCESS] Baris #{no} berhasil dicatat.")
+        return None  # sukses
+    except PermissionError:
+        msg = "Log CSV sedang terbuka di Excel/program lain. Tutup file log terlebih dahulu, lalu coba lagi."
+        print(f"[LOG LOCKED] {msg}")
+        return msg  # kembalikan pesan error ke caller
     except Exception as e:
-        print(f"[LOG ERROR] Gagal menulis log dengan metode DictWriter: {e}")
+        print(f"[LOG ERROR] {e}")
+        return str(e)
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
 @app.get("/")
@@ -756,6 +844,12 @@ def predict():
 
     if not url: return jsonify({"error": "URL kosong"}), 400
     if not is_valid_url(url): return jsonify({"error": "URL tidak valid"}), 400
+
+    # Cek file log sebelum mulai proses apapun.
+    # Jika terkunci → tolak request sekarang juga, jangan buang waktu proses.
+    log_locked, lock_msg = check_log_locked()
+    if log_locked:
+        return jsonify({"error": lock_msg}), 503
 
     rf, xgb, meta, cols, web_content_ok, feats_full = get_model_and_features(url)
     include_web_content = web_content_ok
@@ -806,49 +900,34 @@ def predict():
         log_top_lines = []
         all_shap = exp.get("shap_items", [])
 
+        # Catat semua fitur SHAP dengan abs > 1e-6 (skip hanya jika benar-benar nol)
         if all_shap:
-            log_top_lines.append(" KONTRIBUSI FITUR SHAP")
             for f in all_shap:
-                feat_val = feats_full.get(f["name"], 0)
                 shap_score = f["shap_signed"]
-                
-                # ── ATURAN FILTER 1: Jika skor SHAP mutlak bulat 0, abaikan dan skip! ──
-                if abs(shap_score) < 0.0001:
+                if abs(shap_score) < 1e-6:
                     continue
-                    
-                # ── ATURAN FILTER 2: Jika nilai fitur kosong/nol DAN tidak punya pengaruh signifikan, skip! ──
-                if (feat_val == 0 or feat_val == 0.0 or feat_val is None) and abs(shap_score) < 0.005:
-                    continue
-
-                # Tentukan label arah dampak secara singkat
-                if shap_score > 0:
-                    arah = "PHISHING"
-                elif shap_score < 0:
-                    arah = "BENIGN"
-                else:
-                    arah = "NETRAL"
-                
-                # Masukkan data dengan format super ringkas tanpa teks narasi
+                feat_val = feats_full.get(f["name"], 0)
+                arah = "PHISHING" if shap_score > 0 else ("BENIGN" if shap_score < 0 else "NETRAL")
                 log_top_lines.append(
                     f"Fitur: {f['name']} | Nilai: {feat_val} | SHAP: {shap_score:+.4f} | Dampak: [{arah}]"
                 )
         else:
-            top_ui = exp.get("top_influential_features", [])
-            if top_ui:
-                log_top_lines.append("KONTRIBUSI FITUR")
-                for f in top_ui:
-                    if f.get('value', 0) != 0:
-                        log_top_lines.append(f"Fitur: {f['name']} | Nilai: {f.get('value',0)} | Dampak: [{f.get('impact','?')}]")
-
-        log_top = "  |  ".join(log_top_lines)
+            for f in exp.get("top_influential_features", []):
+                shap_val = f.get("shap_value_signed", f.get("shap_value", 0))
+                arah = f.get("shap_direction", f.get("impact", "?"))
+                log_top_lines.append(
+                    f"Fitur: {f['name']} | Nilai: {f.get('value',0)} | SHAP: {shap_val:+.4f} | Dampak: [{arah}]"
+                )
 
         log_top = "\n".join(log_top_lines)
         feats_for_log = dict(feats_full)
-        feats_for_log["_explanation"] = exp.get("llm_reasoning","")
-        feats_for_log["_top_features"] = log_top
-        feats_for_log["_llm_reasoning"] = exp.get("llm_reasoning","")
+        feats_for_log["_phishing_prob"] = round(p_phish, 4)
+        feats_for_log["_top_features"]  = log_top
+        feats_for_log["_llm_reasoning"] = exp.get("llm_reasoning", "")
         
-        log_feature_extraction(url, mode, feats_for_log, FEATURE_COLUMNS_81, category)
+        log_err = log_feature_extraction(url, mode, feats_for_log, FEATURE_COLUMNS_81, category)
+        if log_err:
+            resp["log_warning"] = log_err
 
         return jsonify(resp)
 
