@@ -630,10 +630,13 @@ def fetch_llm_reasoning_safe(prompt):
 def generate_explanation(url, feats_full, cols, rf_prob, xgb_prob, stack_prob,
                          decision_source, rule_detail, risk_score, rule_flag,
                          rf_model, xgb_model, final_label):
-    p_phish = stack_prob if stack_prob is not None else (
-        0.5*rf_prob + 0.5*xgb_prob if rf_prob is not None and xgb_prob is not None
-        else rf_prob or xgb_prob or 0.0
-    )
+    if decision_source == "rule_based_prefilter_phishing":
+        p_phish = clamp01(max(PREFILTER_PHISHING_MIN_CONF, risk_score/10.0))
+    else:
+        p_phish = stack_prob if stack_prob is not None else (
+            0.5*rf_prob + 0.5*xgb_prob if rf_prob is not None and xgb_prob is not None
+            else rf_prob or xgb_prob or 0.0
+        )
     category = "phishing" if final_label == 1 else "benign"
 
     if decision_source == "rf_only": active_model, model_main = rf_model, "Random Forest"
