@@ -4,82 +4,128 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🛡️ Advanced Hybrid Phishing Detector</title>
+
     <link rel="stylesheet" href="/static/advanced_hybrid_detector.css">
 </head>
 <body>
+
     <div class="container">
+
+        <!-- HEADER -->
         <div class="header">
             <div class="header-content">
+
                 <h1>🛡️ Advanced Hybrid Phishing Detector</h1>
-                <p class="subtitle">Rule-based + Random Forest + XGBoost + Stacking (with selectable modes)</p>
+
+                <p class="subtitle">
+                    Rule-based + Random Forest + XGBoost + Stacking
+                </p>
+
                 <div class="tech-stack">
-                    <span class="tech-badge">🛡️ Rule-based Filtering</span>
-                    <span class="tech-badge">🌳 Random Forest</span>
-                    <span class="tech-badge">⚡ XGBoost</span>
-                    <span class="tech-badge">🔗 Logistic Regression Stacking</span>
+                    <span class="tech-badge">
+                        🛡️ Rule-based Filtering
+                    </span>
+
+                    <span class="tech-badge">
+                        🌳 Random Forest
+                    </span>
+
+                    <span class="tech-badge">
+                        ⚡ XGBoost
+                    </span>
+
+                    <span class="tech-badge">
+                        🔗 Logistic Regression Stacking
+                    </span>
                 </div>
+
             </div>
         </div>
 
+        <!-- MAIN CONTENT -->
         <div class="main-content">
-            <div class="input-section">
-                <label for="urlInput" class="input-label">🔗 Enter URL for Advanced AI Analysis:</label>
-                <input type="text" id="urlInput" class="url-input" placeholder="https://example.com or paste any suspicious URL here...">
 
-                <div class="predict-controls">
-                    <label for="modeSelect" class="prefilter-label">🧪 Prediction Mode:</label>
-                    <select id="modeSelect" class="mode-select">
-                        <option value="rf_only">Random Forest</option>
-                        <option value="xgb_only">XGBoost</option>
-                        <option value="ml_stacking_only"> ML + Stacking</option>
-                        <option value="hybrid_prefilter" selected>Rule-Based + ML + Stacking</option>
-                    </select>
+            <!-- INPUT SECTION -->
+            <div class="input-section">
+
+                <label for="urlInput" class="input-label">
+                    🔗 Enter URL for Advanced AI Analysis:
+                </label>
+
+                <!-- INPUT + HISTORY -->
+                <div class="url-input-wrapper">
+
+                    <input
+                        type="text"
+                        id="urlInput"
+                        class="url-input"
+                        placeholder="https://example.com or paste any suspicious URL here..."
+                        autocomplete="off">
+
+                    <div id="historyPopup" class="history-popup"></div>
+
                 </div>
 
-                <button id="analyzeBtn" class="analyze-btn" onclick="analyzeURL()">🔍 Check URL</button>
+                <!-- MODE SELECT -->
+                <div class="predict-controls">
+
+                    <label for="modeSelect" class="prefilter-label">
+                        🧪 Prediction Mode:
+                    </label>
+
+                    <select id="modeSelect" class="mode-select">
+
+                        <option value="rf_only">
+                            Random Forest
+                        </option>
+
+                        <option value="xgb_only">
+                            XGBoost
+                        </option>
+
+                        <option value="ml_stacking_only">
+                            ML + Stacking
+                        </option>
+
+                        <option value="hybrid_prefilter" selected>
+                            Rule-Based + ML + Stacking
+                        </option>
+
+                    </select>
+
+                </div>
+
+                <!-- BUTTON -->
+                <button
+                    id="analyzeBtn"
+                    class="analyze-btn"
+                    onclick="analyzeURL()">
+
+                    🔍 Check URL
+
+                </button>
+
             </div>
 
+            <!-- LOADING -->
             <div id="loading" class="loading">
+
                 <div class="loading-spinner"></div>
-                <p>Analyzing URL with selected mode...</p>
+
+                <p>
+                    Analyzing URL with selected mode...
+                </p>
+
             </div>
 
+            <!-- RESULT -->
             <div id="result"></div>
 
-            <div class="test-section">
-                <h3>🧪 Test URLs - Click to Auto-Fill & Analyze</h3>
-
-                <div class="url-category">
-                    <div class="category-header">
-                        <span class="category-icon">✅</span>
-                        <span class="category-title">Safe & Benign URLs</span>
-                    </div>
-                    <div class="url-list">
-                        <div class="url-example" onclick="fillURL('https://www.google.com')">https://www.google.com</div>
-                        <div class="url-example" onclick="fillURL('https://github.com')">https://github.com</div>
-                        <div class="url-example" onclick="fillURL('https://www.wikipedia.org')">https://www.wikipedia.org</div>
-                        <div class="url-example" onclick="fillURL('https://www.microsoft.com')">https://www.microsoft.com</div>
-                        <div class="url-example" onclick="fillURL('https://www.apple.com')">https://www.apple.com</div>
-                    </div>
-                </div>
-
-                <div class="url-category">
-                    <div class="category-header">
-                        <span class="category-icon">🚨</span>
-                        <span class="category-title">Phishing URLs</span>
-                    </div>
-                    <div class="url-list">
-                        <div class="url-example" onclick="fillURL('www.dghjdgf.com/paypal.co.uk/cycgi-bin/webscrcmd=_home-customer&nav=1/loading.php')">www.dghjdgf.com/paypal.co.uk/cycgi-bin/webscrcmd=_home-customer&nav=1/loading.php</div>
-                        <div class="url-example" onclick="fillURL('https://smmhejtkx.olghvlbkcdqtscd.top/ksjdbj')">https://smmhejtkx.olghvlbkcdqtscd.top/ksjdbj</div>
-                        <div class="url-example" onclick="fillURL('http://paypal-verify-account-urgent.suspicious.tk')">http://paypal-verify-account-urgent.suspicious.tk</div>
-                        <div class="url-example" onclick="fillURL('https://secure-login.verify.paypal.account-update.phishingsite.com')">https://secure-login.verify.paypal.account-update.phishingsite.com</div>
-                        <div class="url-example" onclick="fillURL('http://192.168.1.1/amazon-login@phishing-secure.com')">http://192.168.1.1/amazon-login@phishing-secure.com</div>
-                    </div>
-                </div>
-            </div>
         </div>
+
     </div>
 
     <script src="/static/advanced_hybrid_detector.js"></script>
+
 </body>
 </html>

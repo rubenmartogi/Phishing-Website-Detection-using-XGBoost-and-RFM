@@ -1,3 +1,5 @@
+const STORAGE_KEY = "phishing_url_history";
+const MAX_HISTORY = 10;
 // Convert markdown bold (**text**) to HTML bold (<b>text</b>)
 function markdownToHtml(str) {
     if (!str) return "";
@@ -19,7 +21,102 @@ function escapeHtml(str) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+function getHistory() {
 
+    try {
+        return JSON.parse(
+            localStorage.getItem(STORAGE_KEY)
+        ) || [];
+
+    } catch {
+
+        return [];
+    }
+}
+
+function saveHistory(url) {
+
+    if (!url) return;
+
+    let history = getHistory();
+
+    history = history.filter(
+        item => item !== url
+    );
+
+    history.unshift(url);
+
+    history = history.slice(
+        0,
+        MAX_HISTORY
+    );
+
+    localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(history)
+    );
+}
+
+function hideHistoryPopup() {
+
+    const popup =
+        document.getElementById(
+            "historyPopup"
+        );
+
+    if (!popup) return;
+
+    popup.classList.remove(
+        "show"
+    );
+}
+
+function renderHistoryPopup(filter = "") {
+
+    const popup =
+        document.getElementById(
+            "historyPopup"
+        );
+
+    if (!popup) return;
+
+    let history =
+        getHistory();
+
+    const keyword =
+        filter.trim().toLowerCase();
+
+    if (keyword) {
+
+        history =
+            history.filter(url =>
+                url
+                .toLowerCase()
+                .includes(keyword)
+            );
+    }
+
+    if (history.length === 0) {
+
+        popup.innerHTML = "";
+        popup.classList.add("show");
+
+        return;
+    }
+
+    popup.innerHTML =
+        history.map(url => `
+            <div
+                class="history-item"
+                data-url="${escapeHtml(url)}">
+
+                🔗 ${escapeHtml(url)}
+
+            </div>
+        `).join("");
+
+    popup.classList.add("show");
+}
 function backendToEnhancedResult(data, url) {
     const pPhish = clamp01(data.final_phishing_prob);
     const isPhishing = Number(data.final_label) === 1;
@@ -130,22 +227,47 @@ function displayEnhancedResult(result, url) {
         </div>
     </div>
     `;
-
     resultDiv.innerHTML = `
-        <div class="result ${resultClass}">
-            <div class="result-title">${escapeHtml(result.result)}</div>
-            <div class="mini-grid">
-                <div class="mini-card"><span>Model</span><b>${escapeHtml(result.algorithm)}</b></div>
-                <div class="mini-card"><span>Rule</span><b>score &lt; ${threshold.toFixed(2)} = BENIGN, score ≥ ${threshold.toFixed(2)} = PHISHING</b></div>
-                ${topFeaturesHtml}
-            </div>
-            <div class="mini-card ai-reasoning-card" style="margin:16px 0 8px 0;">
-                <span>AI Reasoning</span>
-                <div style="white-space:pre-line" class="ai-reasoning-html">${result.explanation}</div>
-            </div>
-            ${riskBarHtml}
+    <div class="result ${resultClass}">
+
+        <div class="result-title">
+            ${escapeHtml(result.result)}
         </div>
-    `;
+
+        <!-- MODEL + RULE -->
+        <div class="mini-grid">
+
+            <div class="mini-card">
+                <span>Model</span>
+                <b>${escapeHtml(result.algorithm)}</b>
+            </div>
+
+            <div class="mini-card">
+                <span>Rule</span>
+                <b>
+                    score &lt; ${threshold.toFixed(2)} = BENIGN,
+                    score ≥ ${threshold.toFixed(2)} = PHISHING
+                </b>
+            </div>
+
+        </div>
+
+        <!-- PHISHING SCORE -->
+        ${riskBarHtml}
+
+        <!-- FITUR -->
+        ${topFeaturesHtml}
+
+        <!-- AI REASONING -->
+        <div class="mini-card ai-reasoning-card">
+            <span>AI Reasoning</span>
+            <div class="ai-reasoning-html" style="white-space:pre-line">
+                ${result.explanation}
+            </div>
+        </div>
+
+    </div>
+ `;
 }
 
 function fillURL(url) {
@@ -193,9 +315,20 @@ async function analyzeURL() {
                 },
                 url
             );
-        } else {
-            const mapped = backendToEnhancedResult(data, url);
-            displayEnhancedResult(mapped, url);
+         } else {
+
+            saveHistory(url);
+
+            const mapped =
+                backendToEnhancedResult(
+                    data,
+                    url
+                );
+
+            displayEnhancedResult(
+                mapped,
+                url
+            );
         }
     } catch (e) {
         displayEnhancedResult(
@@ -212,13 +345,116 @@ async function analyzeURL() {
 }
 
 function initDetectorUI() {
-    const urlInput = document.getElementById("urlInput");
-    if (urlInput) {
-        urlInput.addEventListener("keypress", function (e) {
-            if (e.key === "Enter") analyzeURL();
-        });
-        urlInput.focus();
-    }
+
+    const urlInput =
+        document.getElementById(
+            "urlInput"
+        );
+
+    const popup =
+        document.getElementById(
+            "historyPopup"
+        );
+
+    if (!urlInput || !popup)
+        return;
+
+    urlInput.focus();
+    
+    renderHistoryPopup();
+    hideHistoryPopup();
+
+    urlInput.addEventListener(
+        "keypress",
+        function(e){
+
+            if(e.key==="Enter"){
+
+                analyzeURL();
+
+            }
+
+        }
+    );
+
+    urlInput.addEventListener(
+        "focus",
+        function(){
+
+            renderHistoryPopup(
+                urlInput.value
+            );
+
+        }
+    );
+
+    urlInput.addEventListener(
+        "click",
+        function(){
+
+            renderHistoryPopup(
+                urlInput.value
+            );
+
+        }
+    );
+
+    urlInput.addEventListener(
+        "input",
+        function(){
+
+            renderHistoryPopup(
+                this.value
+            );
+
+        }
+    );
+
+    popup.addEventListener(
+        "click",
+        function(e){
+
+            const item =
+                e.target.closest(
+                    ".history-item"
+                );
+
+            if(!item) return;
+
+            urlInput.value =
+                item.dataset.url;
+
+            hideHistoryPopup();
+
+            urlInput.focus();
+
+        }
+    );
+
+    document.addEventListener(
+        "click",
+        function(e){
+
+            if(
+
+                !urlInput.contains(
+                    e.target
+                )
+
+                &&
+
+                !popup.contains(
+                    e.target
+                )
+
+            ){
+
+                hideHistoryPopup();
+
+            }
+
+        }
+    );
 }
 
 window.analyzeURL = analyzeURL;
