@@ -115,12 +115,17 @@ def prep_data(feature_mode):
 
 def evaluate_model(model, X, y, name):
     """Kembalikan dict metrik lengkap."""
+    THRESHOLD = 0.6   # konsisten dengan notebook (threshold phishing = 0.6)
     try:
         proba = model.predict_proba(X)[:, 1]
     except Exception:
         proba = None
 
-    pred = model.predict(X)
+    # Gunakan threshold 0.6 
+    if proba is not None:
+        pred = (proba >= THRESHOLD).astype(int)
+    else:
+        pred = model.predict(X)
 
     acc  = accuracy_score(y, pred)
     prec = precision_score(y, pred, zero_division=0)
@@ -546,32 +551,6 @@ def plot_summary_table(results):
     plt.close()
     print(f"  ✅ Saved: {out}")
 
-# ══════════════════════════════════════════════════════════════════════════════
-# Simpan CSV ringkasan
-# ══════════════════════════════════════════════════════════════════════════════
-def save_csv(results):
-    rows = []
-    for k in MODEL_ORDER:
-        r = results[k]
-        tn, fp, fn, tp = r["cm"].ravel()
-        rows.append({
-            "Model": k,
-            "Accuracy (%)":  round(r["acc"]  * 100, 4),
-            "Precision (%)": round(r["prec"] * 100, 4),
-            "Recall (%)":    round(r["rec"]  * 100, 4),
-            "F1-Score (%)":  round(r["f1"]   * 100, 4),
-            "AUC-ROC (%)":   round(r["auc"]  * 100, 4),
-            "Avg Precision": round(float(r["ap"]), 4),
-            "TP": int(tp), "TN": int(tn), "FP": int(fp), "FN": int(fn),
-        })
-    df = pd.DataFrame(rows)
-    out = os.path.join(RESULTS_DIR, "performance_summary.csv")
-    df.to_csv(out, index=False, encoding="utf-8-sig")
-    print(f"\n  ✅ CSV saved: {out}")
-    print("\n" + "="*80)
-    print(df.to_string(index=False))
-    print("="*80)
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PLOT 7: AUC Bar Chart Tersendiri
@@ -634,30 +613,29 @@ if __name__ == "__main__":
     print("  EVALUASI PERBANDINGAN KINERJA MODEL PHISHING DETECTION")
     print("="*60)
 
-    print("\n[1/8] Loading & evaluating models...")
+    print("\n[1/7] Loading & evaluating models...")
     results = run_evaluation()
 
-    print("\n[2/8] Plotting bar chart metrik (Acc/Prec/Rec/F1)...")
+    print("\n[2/7] Plotting bar chart metrik (Acc/Prec/Rec/F1)...")
     plot_metric_comparison(results)
 
-    print("\n[3/8] Plotting ROC curves...")
+    print("\n[3/7] Plotting ROC curves...")
     plot_roc_curves(results)
 
-    print("\n[4/8] Plotting Precision-Recall curves...")
+    print("\n[4/7] Plotting Precision-Recall curves...")
     plot_pr_curves(results)
 
-    print("\n[5/8] Plotting confusion matrices...")
+    print("\n[5/7] Plotting confusion matrices...")
     plot_confusion_matrices(results)
 
-    print("\n[6/8] Plotting radar chart...")
+    print("\n[6/7] Plotting radar chart...")
     plot_radar_chart(results)
 
-    print("\n[7/8] Plotting summary heatmap & saving CSV...")
+    print("\n[7/7] Plotting summary heatmap & AUC comparison...")
     plot_summary_table(results)
-    save_csv(results)
-
-    print("\n[8/8] Plotting AUC bar chart tersendiri...")
     plot_auc_comparison(results)
 
+
     print(f"\nSemua grafik tersimpan di folder: {RESULTS_DIR}")
-    print("   Buka file PNG satu per satu atau buka folder results/\n")
+    print("   7 file PNG tersedia di folder results/\n")
+
