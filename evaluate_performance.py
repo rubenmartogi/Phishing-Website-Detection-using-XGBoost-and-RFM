@@ -1,4 +1,4 @@
-"""
+﻿"""
 evaluate_performance.py
 =======================
 Script evaluasi perbandingan kinerja model:
@@ -382,7 +382,7 @@ def plot_metric_comparison_group(results, group_keys, title, filename):
     ax.spines[:].set_color("#ccc")
     ax.yaxis.grid(True, color="#ddd", linestyle="--", alpha=0.8)
     ax.set_axisbelow(True)
-    ax.legend(loc="lower right", fontsize=11,
+    ax.legend(loc="upper right", fontsize=11,
               facecolor="white", edgecolor="#ccc", labelcolor="#222")
 
     plt.tight_layout()
@@ -654,7 +654,7 @@ def plot_auc_comparison(results):
     ax.xaxis.grid(True, color="#ddd", linestyle="--", alpha=0.8)
     ax.set_axisbelow(True)
     ax.invert_yaxis()   # Model terbaik di atas
-    ax.legend(loc="lower right", fontsize=10,
+    ax.legend(loc="upper right", fontsize=10,
               facecolor="white", edgecolor="#ccc", labelcolor="#333")
 
     plt.tight_layout()
@@ -679,7 +679,7 @@ if __name__ == "__main__":
     plot_metric_comparison_group(
         results,
         group_keys=["RF-37", "XGB-37", "Stack-37", "Hybrid-37"],
-        title="Perbandingan Kinerja Model â€“ 37 Fitur URL",
+        title="Perbandingan Kinerja Model - 37 Fitur URL",
         filename="01b_metric_comparison_37.png",
     )
 
@@ -687,7 +687,7 @@ if __name__ == "__main__":
     plot_metric_comparison_group(
         results,
         group_keys=["RF-81", "XGB-81", "Stack-81", "Hybrid-81"],
-        title="Perbandingan Kinerja Model â€“ 81 Fitur Hybrid",
+        title="Perbandingan Kinerja Model - 81 Fitur Hybrid",
         filename="01c_metric_comparison_81.png",
     )
 
