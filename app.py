@@ -92,6 +92,9 @@ def check_log_locked():
     finally:
         fh.close()
 
+import threading as _threading
+_log_lock = _threading.Lock()
+
 executor = ThreadPoolExecutor(max_workers=4)
 GLOBAL_MODELS = {}
 
@@ -124,6 +127,10 @@ except Exception:
 
 def app_path(*parts): return os.path.join(BASE_DIR, *parts)
 def clamp01(v): return float(min(max(v, 0.0), 1.0))
+def safe_avg(*probs):
+    """Rata-rata probabilitas yang aman terhadap None."""
+    vals = [p for p in probs if p is not None]
+    return clamp01(sum(vals) / len(vals)) if vals else 0.5
 def to_float(v, d=0.0):
     try:
         x = float(v)
@@ -304,36 +311,39 @@ def extract_features(url, include_web_content):
 
 def rule_based_eval(url, return_detail=False):
     feats = extract_url_features(url)
+    # Sangat Penting: satu fitur saja → langsung Phishing (sesuai dokumen TASI Bab 3.4)
     very_important = {
-        "suspicious_tld": feats.get("suspicious_tld",0)==1,
-        "nb_at": feats.get("nb_at",0)>=1,
-        "ip": feats.get("ip",0)==1,
-        "nb_underscore": feats.get("nb_underscore",0)>3,
-    }
-    important = {
-        "ratio_digits_url": feats.get("ratio_digits_url",0)>0.3,
-        "nb_subdomains": feats.get("nb_subdomains",0)>3,
-        "nb_percent": feats.get("nb_percent",0)>5,
-        "nb_tilde": feats.get("nb_tilde",0)>=1,
-        "nb_semicolumn": feats.get("nb_semicolumn",0)>=1,
-        "nb_star": feats.get("nb_star",0)>=1,
-        "nb_comma": feats.get("nb_comma",0)>=1,
-        "random_domain": feats.get("random_domain",0)==1,
-    }
-    less_important = {
-        "length_hostname": feats.get("length_hostname",0)>30,
-        "nb_dollar": feats.get("nb_dollar",0)>=1,
-        "nb_qm": feats.get("nb_qm",0)>2,
-        "nb_colon": feats.get("nb_colon",0)>1,
-        "nb_eq": feats.get("nb_eq",0)>8,
-        "nb_dots": feats.get("nb_dots",0)>4,
-        "nb_slash": feats.get("nb_slash",0)>7,
-        "nb_and": feats.get("nb_and",0)>3,
-        "nb_hyphens": feats.get("nb_hyphens",0)>3,
-        "http_in_path": feats.get("http_in_path",0)==1,
-        "https_token": feats.get("https_token",0)==1,
-        "port": feats.get("port",0)==1,
+        "suspicious_tld":     feats.get("suspicious_tld",0)==1,
+        "ip":                 feats.get("ip",0)==1,
+        "random_domain":      feats.get("random_domain",0)==1,
         "shortening_service": feats.get("shortening_service",0)==1,
+        "http_in_path":       feats.get("http_in_path",0)==1,
+        "https_token":        feats.get("https_token",0)==1,
+    }
+    # Penting: bobot ×2 (sesuai dokumen TASI Bab 3.4)
+    important = {
+        "nb_at":          feats.get("nb_at",0)>=1,
+        "nb_subdomains":  feats.get("nb_subdomains",0)>3,
+        "nb_dots":        feats.get("nb_dots",0)>4,
+        "nb_slash":       feats.get("nb_slash",0)>7,
+        "length_hostname":feats.get("length_hostname",0)>30,
+        "nb_percent":     feats.get("nb_percent",0)>5,
+        "nb_tilde":       feats.get("nb_tilde",0)>=1,
+        "nb_semicolumn":  feats.get("nb_semicolumn",0)>=1,
+        "nb_star":        feats.get("nb_star",0)>=1,
+        "nb_comma":       feats.get("nb_comma",0)>=1,
+        "nb_dollar":      feats.get("nb_dollar",0)>=1,
+        "nb_qm":          feats.get("nb_qm",0)>2,
+        "nb_colon":       feats.get("nb_colon",0)>1,
+        "nb_eq":          feats.get("nb_eq",0)>8,
+        "nb_and":         feats.get("nb_and",0)>3,
+        "nb_hyphens":     feats.get("nb_hyphens",0)>3,
+        "nb_underscore":  feats.get("nb_underscore",0)>3,
+    }
+    # Cukup Penting: bobot ×1 (sesuai dokumen TASI Bab 3.4)
+    less_important = {
+        "ratio_digits_url": feats.get("ratio_digits_url",0)>0.3,
+        "port":             feats.get("port",0)==1,
     }
     vi_hits = [k for k,v in very_important.items() if v]
     imp_hits = [k for k,v in important.items() if v]
@@ -411,8 +421,10 @@ def predict_models(feats, cols, precomputed_rule_score=None, precomputed_rule_fl
         try:
             stack_pred = _label_to_phishing_flag(int(meta.predict(meta_X)[0]))
             stack_prob = _proba_for_class(meta, meta_X, PHISHING_CLASS_VALUE)
-        except:
-            pass
+        except Exception as e:
+            print(f"[STACK WARNING] Meta-learner gagal: {e}")
+            stack_pred = None
+            stack_prob = None
 
     return {
         "rf_prob": rf_prob, "xgb_prob": xgb_prob,
@@ -598,7 +610,8 @@ def get_phishing_risk_direction(feature_name, feature_value):
 def build_llm_prompt(url, category, p_phish, model_main, top_features_with_reasons, rekomendasi_tetap):
     lines = []
     for i, f in enumerate(top_features_with_reasons, 1):
-        lines.append(f"  {i}. Fitur: {f['display_name']} | Status: {f['impact']} | Hasil Ekstraksi: {f['reason']}")
+        nilai_str = f"Nilai: {f['value']} | " if "value" in f else ""
+        lines.append(f"  {i}. Fitur: {f['display_name']} | {nilai_str}Status: {f['impact']} | Hasil Ekstraksi: {f['reason']}")
     
     features_block = "\n".join(lines) if lines else "  (Data fitur tidak tersedia)"
 
@@ -668,9 +681,90 @@ def generate_explanation(url, feats_full, cols, rf_prob, xgb_prob, stack_prob,
     ]
 
     FEATURE_LABEL_MAP = {
-        "page_rank": "PageRank Mesin Pencari", "google_index": "Indeks Google", 
-        "web_traffic": "Trafik Web", "length_hostname": "Panjang Hostname", "nb_www": "Subdomain WWW",
-        "nb_hyperlinks": "Jumlah Tautan Halaman"
+        # Fitur URL struktural
+        "length_url":           "Panjang URL",
+        "length_hostname":      "Panjang Hostname",
+        "ip":                   "Penggunaan IP Address",
+        "nb_dots":              "Jumlah Titik (.) di URL",
+        "nb_hyphens":           "Jumlah Tanda Hubung (-)",
+        "nb_at":                "Jumlah Simbol @",
+        "nb_qm":                "Jumlah Tanda Tanya (?)",
+        "nb_and":               "Jumlah Simbol &",
+        "nb_eq":                "Jumlah Simbol =",
+        "nb_underscore":        "Jumlah Garis Bawah (_)",
+        "nb_tilde":             "Jumlah Simbol Tilde (~)",
+        "nb_percent":           "Jumlah Karakter Persen (%)",
+        "nb_slash":             "Jumlah Garis Miring (/)",
+        "nb_star":              "Jumlah Simbol Bintang (*)",
+        "nb_colon":             "Jumlah Titik Dua (:)",
+        "nb_comma":             "Jumlah Koma (,)",
+        "nb_semicolumn":        "Jumlah Titik Koma (;)",
+        "nb_dollar":            "Jumlah Simbol Dollar ($)",
+        "nb_space":             "Jumlah Spasi di URL",
+        "nb_www":               "Subdomain WWW",
+        "nb_com":               "Kemunculan .com di URL",
+        "nb_dslash":            "Jumlah Double Slash (//)",
+        "http_in_path":         "HTTP di Path URL",
+        "https_token":          "Token HTTPS Palsu di Path",
+        "ratio_digits_url":     "Rasio Angka dalam URL",
+        "ratio_digits_host":    "Rasio Angka dalam Hostname",
+        "punycode":             "Penggunaan Punycode (xn--)",
+        "port":                 "Port Tidak Standar",
+        "tld_in_path":          "TLD Muncul di Path",
+        "tld_in_subdomain":     "TLD Muncul di Subdomain",
+        "abnormal_subdomain":   "Subdomain Tidak Normal",
+        "nb_subdomains":        "Jumlah Subdomain",
+        "prefix_suffix":        "Tanda Hubung di Nama Domain",
+        "random_domain":        "Domain Acak/Tidak Bermakna",
+        "shortening_service":   "Layanan Pemendek URL",
+        "path_extension":       "Ekstensi File di Path",
+        "nb_redirection":       "Redirect Tersembunyi di URL",
+        "length_words_raw":     "Jumlah Kata dalam URL",
+        "char_repeat":          "Pengulangan Karakter",
+        "shortest_words_raw":   "Kata Terpendek di URL",
+        "shortest_word_host":   "Kata Terpendek di Hostname",
+        "shortest_word_path":   "Kata Terpendek di Path",
+        "longest_words_raw":    "Kata Terpanjang di URL",
+        "longest_word_host":    "Kata Terpanjang di Hostname",
+        "longest_word_path":    "Kata Terpanjang di Path",
+        "avg_words_raw":        "Rata-rata Panjang Kata di URL",
+        "avg_word_host":        "Rata-rata Panjang Kata di Hostname",
+        "avg_word_path":        "Rata-rata Panjang Kata di Path",
+        "phish_hints":          "Kata Kunci Phishing di URL",
+        "domain_in_brand":      "Domain Cocok dengan Brand Besar",
+        "brand_in_subdomain":   "Nama Brand di Subdomain",
+        "brand_in_path":        "Nama Brand di Path URL",
+        "suspicious_tld":       "TLD Mencurigakan",
+        "statistical_report":   "Laporan Statistik Keamanan",
+        # Fitur konten halaman web
+        "nb_hyperlinks":        "Jumlah Tautan di Halaman",
+        "ratio_intHyperlinks":  "Rasio Tautan Internal",
+        "ratio_extHyperlinks":  "Rasio Tautan Eksternal",
+        "nb_extCSS":            "Jumlah CSS Eksternal",
+        "ratio_extRedirection": "Rasio Redirect Eksternal",
+        "ratio_extErrors":      "Rasio Error Eksternal",
+        "login_form":           "Formulir Login di Halaman",
+        "external_favicon":     "Favicon dari Domain Lain",
+        "links_in_tags":        "Resource Eksternal di Tag HTML",
+        "ratio_intMedia":       "Rasio Media Internal",
+        "ratio_extMedia":       "Rasio Media Eksternal",
+        "iframe":               "Penggunaan Iframe",
+        "popup_window":         "Popup Otomatis",
+        "safe_anchor":          "Anchor Tidak Aman",
+        "onmouseover":          "Manipulasi Hover Mouse",
+        "right_clic":           "Klik Kanan Dinonaktifkan",
+        "empty_title":          "Judul Halaman Kosong",
+        "domain_in_title":      "Domain di Judul Halaman",
+        "domain_with_copyright":"Hak Cipta Domain di Halaman",
+        "nb_external_redirection": "Redirect ke Domain Luar",
+        # Fitur domain & reputasi
+        "whois_registered_domain":    "Status WHOIS Domain",
+        "domain_registration_length": "Durasi Registrasi Domain",
+        "domain_age":           "Usia Domain",
+        "web_traffic":          "Trafik Web",
+        "dns_record":           "DNS Record",
+        "google_index":         "Indeks Google",
+        "page_rank":            "PageRank Mesin Pencari",
     }
 
     # Fitur web-content yang nilainya 0 karena API gagal bukan berarti kondisi nyata 0.
@@ -717,6 +811,7 @@ def generate_explanation(url, feats_full, cols, rf_prob, xgb_prob, stack_prob,
 
         top_features_reasons.append({
             "display_name": FEATURE_LABEL_MAP.get(f["name"], f["name"].replace("_", " ")),
+            "value": feat_val,
             "impact": display_impact,
             "reason": reason
         })
@@ -740,6 +835,10 @@ def generate_explanation(url, feats_full, cols, rf_prob, xgb_prob, stack_prob,
     }
 
 def log_feature_extraction(url, mode, feats, feature_columns_81, status, decision_source):
+    with _log_lock:
+        return _log_feature_extraction_impl(url, mode, feats, feature_columns_81, status, decision_source)
+
+def _log_feature_extraction_impl(url, mode, feats, feature_columns_81, status, decision_source):
     csv_path = LOG_PATH
     write_header = not os.path.exists(csv_path)
     
@@ -956,7 +1055,7 @@ def predict():
         preds = predict_models(feats_full, cols, risk_score, rule_flag, rf, xgb, meta)
         if preds["stack_prob"] is not None:
             return build_response(clamp01(preds["stack_prob"]), "ml_stacking_only", "RF + XGB + Logistic Regression Stacking", preds["rf_prob"], preds["xgb_prob"], preds["stack_prob"], rf_model=rf, xgb_model=xgb)
-        p = clamp01(0.5*(preds["rf_prob"] or 0.0) + 0.5*(preds["xgb_prob"] or 0.0))
+        p = safe_avg(preds["rf_prob"], preds["xgb_prob"])
         return build_response(p, "ml_rf_xgb_average_only", "RF + XGB Average", preds["rf_prob"], preds["xgb_prob"], rf_model=rf, xgb_model=xgb)
 
     if use_prefilter and rule_flag == 1:
@@ -966,7 +1065,7 @@ def predict():
     preds = predict_models(feats_full, cols, risk_score, rule_flag, rf, xgb, meta)
     if preds["stack_prob"] is not None:
         return build_response(clamp01(preds["stack_prob"]), "ml_stacking_only", "RF + XGB + Logistic Regression Stacking", preds["rf_prob"], preds["xgb_prob"], preds["stack_prob"], rf_model=rf, xgb_model=xgb)
-    p = clamp01(0.5*(preds["rf_prob"] or 0.0) + 0.5*(preds["xgb_prob"] or 0.0))
+    p = safe_avg(preds["rf_prob"], preds["xgb_prob"])
     return build_response(p, "ml_rf_xgb_average_only", "RF + XGB Average", preds["rf_prob"], preds["xgb_prob"], rf_model=rf, xgb_model=xgb)
 
 @app.post("/predict_url")
