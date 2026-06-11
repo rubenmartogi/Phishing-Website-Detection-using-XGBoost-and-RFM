@@ -11,12 +11,12 @@ Script evaluasi perbandingan kinerja model:
 
 Output:
   - Tabel metrik di terminal
-  - results/01_metric_comparison.png   → Bar chart Acc/Prec/Rec/F1/AUC
-  - results/02_roc_curves.png          → ROC Curve semua model
-  - results/03_pr_curves.png           → Precision-Recall Curve
-  - results/04_confusion_matrices.png  → Confusion Matrix 6 model
-  - results/05_radar_chart.png         → Radar Chart perbandingan
-  - results/performance_summary.csv    → Tabel ringkasan CSV
+  - results/01_metric_comparison.png   â†’ Bar chart Acc/Prec/Rec/F1/AUC
+  - results/02_roc_curves.png          â†’ ROC Curve semua model
+  - results/03_pr_curves.png           â†’ Precision-Recall Curve
+  - results/04_confusion_matrices.png  â†’ Confusion Matrix 6 model
+  - results/05_radar_chart.png         â†’ Radar Chart perbandingan
+  - results/performance_summary.csv    â†’ Tabel ringkasan CSV
 """
 
 import os
@@ -39,7 +39,7 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 
-# ── Konfigurasi ───────────────────────────────────────────────────────────────
+# â”€â”€ Konfigurasi â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 RANDOM_STATE = 12
 TEST_SIZE    = 0.2
 TARGET_COL   = "label"
@@ -48,7 +48,7 @@ DATA_PATH    = os.path.join(BASE_DIR, "DataFiles", "data_cleaning.csv")
 RESULTS_DIR  = os.path.join(BASE_DIR, "results")
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-# Warna per model — 2 keluarga warna bergradasi (terang → gelap)
+# Warna per model â€” 2 keluarga warna bergradasi (terang â†’ gelap)
 # Biru  : Mode 37-fitur (URL-based)   | Teal : Mode 81-fitur (Hybrid)
 COLORS = {
     "RF-37":       "#90CAF9",   # Biru muda      (Blue 200)
@@ -73,7 +73,7 @@ URL_FEATURES_37 = [
     "path_extension","nb_redirection",
 ]
 
-# ── Helper ────────────────────────────────────────────────────────────────────
+# â”€â”€ Helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def load_model(filename):
     path = os.path.join(BASE_DIR, filename)
     if not os.path.exists(path):
@@ -150,7 +150,7 @@ def evaluate_model(model, X, y, name):
         "pr_prec": pr_prec, "pr_rec": pr_rec,
     }
 
-# ── Rule-Based prefilter (vectorized dari fitur dataset) ─────────────────────
+# â”€â”€ Rule-Based prefilter (vectorized dari fitur dataset) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def rule_flag_from_df(X_df: pd.DataFrame) -> np.ndarray:
     """
     Terapkan aturan rule-based (sama dengan app.py rule_based_eval) secara
@@ -161,7 +161,7 @@ def rule_flag_from_df(X_df: pd.DataFrame) -> np.ndarray:
     def col(name, default=0):
         return X_df[name].fillna(default).values if name in X_df.columns else np.full(len(X_df), default)
 
-    # Very important (salah satu saja → Phishing)
+    # Very important (salah satu saja â†’ Phishing)
     vi = (
         (col("suspicious_tld")   == 1) |
         (col("nb_at")            >= 1) |
@@ -169,7 +169,7 @@ def rule_flag_from_df(X_df: pd.DataFrame) -> np.ndarray:
         (col("nb_underscore")    >  3)
     )
 
-    # Important (skor ×2)
+    # Important (skor Ã—2)
     imp = (
         (col("ratio_digits_url") >  0.3).astype(int) +
         (col("nb_subdomains")    >  3  ).astype(int) +
@@ -181,7 +181,7 @@ def rule_flag_from_df(X_df: pd.DataFrame) -> np.ndarray:
         (col("random_domain")    == 1  ).astype(int)
     )
 
-    # Less important (skor ×1)
+    # Less important (skor Ã—1)
     less = (
         (col("length_hostname")  > 30).astype(int) +
         (col("nb_dollar")        >= 1).astype(int) +
@@ -227,11 +227,11 @@ def evaluate_from_arrays(pred: np.ndarray, proba: np.ndarray,
     }
 
 
-# ── Evaluasi semua model ───────────────────────────────────────────────────────
+# â”€â”€ Evaluasi semua model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def run_evaluation():
     results = {}
 
-    # ── Mode 37 fitur ──
+    # â”€â”€ Mode 37 fitur â”€â”€
     print("\n=== Mode 37 Fitur (URL-based) ===")
     X37, y37 = prep_data("37")
     cols37   = load_cols("feature_columns_37.txt")
@@ -259,7 +259,7 @@ def run_evaluation():
     hybrid_pred37 = (hybrid_p37 >= 0.6).astype(int)
     results["Hybrid-37"] = evaluate_from_arrays(hybrid_pred37, hybrid_p37, y37, "Hybrid-37")
 
-    # ── Mode 81 fitur ──
+    # â”€â”€ Mode 81 fitur â”€â”€
     print("\n=== Mode 81 Fitur (Hybrid) ===")
     X81, y81 = prep_data("81")
     cols81   = load_cols("feature_columns_81.txt")
@@ -288,11 +288,11 @@ def run_evaluation():
 
     return results
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PLOT 1: Bar Chart Metrik Perbandingan
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# PLOT 1: Bar Chart Metrik Perbandingan (semua model)
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def plot_metric_comparison(results):
-    # AUC tidak ditampilkan di bar chart — hanya di ROC curve
+    # AUC tidak ditampilkan di bar chart â€” hanya di ROC curve
     metrics  = ["acc", "prec", "rec", "f1"]
     mlabels  = ["Accuracy", "Precision", "Recall", "F1-Score"]
     n_metrics = len(metrics)
@@ -311,21 +311,21 @@ def plot_metric_comparison(results):
         bars = ax.bar(x + offset, vals, width, label=mkey,
                       color=COLORS[mkey], alpha=0.9, edgecolor="white", linewidth=0.5)
         for bar, v in zip(bars, vals):
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.3,
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.2,
                     f"{v:.1f}", ha="center", va="bottom",
-                    fontsize=6.5, color="#222", fontweight="bold")
+                    fontsize=7.5, color="#111", fontweight="bold",
+                    rotation=0)
 
     ax.set_xticks(x)
     ax.set_xticklabels(mlabels, fontsize=13, color="#222")
     ax.set_ylabel("Score (%)", fontsize=13, color="#222")
     ax.set_title("Perbandingan Kinerja Model", fontsize=16,
                  fontweight="bold", color="#111", pad=15)
-    ax.set_ylim(75, 103)
+    ax.set_ylim(70, 108)
     ax.tick_params(colors="#222")
     ax.spines[:].set_color("#ccc")
     ax.yaxis.grid(True, color="#ddd", linestyle="--", alpha=0.8)
     ax.set_axisbelow(True)
-    # Legend di luar grafik sisi kanan agar tidak menutupi bar
     legend = ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0),
                        fontsize=10, facecolor="white", edgecolor="#ccc",
                        labelcolor="#222", borderaxespad=0)
@@ -333,11 +333,67 @@ def plot_metric_comparison(results):
     out = os.path.join(RESULTS_DIR, "01_metric_comparison.png")
     fig.savefig(out, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
     plt.close()
-    print(f"  ✅ Saved: {out}")
+    print(f"  âœ… Saved: {out}")
 
-# ══════════════════════════════════════════════════════════════════════════════
+
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# PLOT 1b & 1c: Bar Chart Metrik per Grup Fitur (37 / 81)
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+def plot_metric_comparison_group(results, group_keys, title, filename):
+    """Bar chart metrik untuk subset model tertentu (37 atau 81 fitur)."""
+    metrics   = ["acc", "prec", "rec", "f1"]
+    mlabels   = ["Accuracy", "Precision", "Recall", "F1-Score"]
+    n_metrics = len(metrics)
+    n_models  = len(group_keys)
+    x     = np.arange(n_metrics)
+    width = 0.18   # bar lebih lebar karena hanya 4 model
+
+    fig, ax = plt.subplots(figsize=(13, 7))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("#f8f9fa")
+
+    for i, mkey in enumerate(group_keys):
+        r    = results[mkey]
+        vals = [r[m] * 100 for m in metrics]
+        offset = (i - n_models / 2 + 0.5) * width
+        bars = ax.bar(x + offset, vals, width, label=mkey,
+                      color=COLORS[mkey], alpha=0.9,
+                      edgecolor="white", linewidth=0.6)
+        for bar, v in zip(bars, vals):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.2,
+                f"{v:.1f}",
+                ha="center", va="bottom",
+                fontsize=10, color="#111", fontweight="bold",
+                rotation=0
+            )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(mlabels, fontsize=13, color="#222")
+    ax.set_ylabel("Score (%)", fontsize=13, color="#222")
+    ax.set_title(title, fontsize=16, fontweight="bold", color="#111", pad=15)
+
+    # Batas atas Y sedikit di atas nilai max agar label tidak terpotong
+    all_vals = [results[k][m] * 100 for k in group_keys for m in metrics]
+    ax.set_ylim(max(0, min(all_vals) - 5), max(all_vals) + 4)
+
+    ax.tick_params(colors="#222")
+    ax.spines[:].set_color("#ccc")
+    ax.yaxis.grid(True, color="#ddd", linestyle="--", alpha=0.8)
+    ax.set_axisbelow(True)
+    ax.legend(loc="lower right", fontsize=11,
+              facecolor="white", edgecolor="#ccc", labelcolor="#222")
+
+    plt.tight_layout()
+    out = os.path.join(RESULTS_DIR, filename)
+    fig.savefig(out, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+    plt.close()
+    print(f"  âœ… Saved: {out}")
+
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # PLOT 2: ROC Curves
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def plot_roc_curves(results):
     fig, axes = plt.subplots(1, 2, figsize=(16, 7))
     fig.patch.set_facecolor("white")
@@ -357,7 +413,7 @@ def plot_roc_curves(results):
                         label=f"{k}  (AUC={r['auc']:.4f})")
         ax.set_xlabel("False Positive Rate", color="#222", fontsize=11)
         ax.set_ylabel("True Positive Rate", color="#222", fontsize=11)
-        ax.set_title(f"ROC Curve – {title}", color="#111", fontsize=13, fontweight="bold")
+        ax.set_title(f"ROC Curve â€“ {title}", color="#111", fontsize=13, fontweight="bold")
         ax.tick_params(colors="#222")
         ax.spines[:].set_color("#ccc")
         ax.grid(color="#ddd", linestyle="--", alpha=0.8)
@@ -369,11 +425,11 @@ def plot_roc_curves(results):
     out = os.path.join(RESULTS_DIR, "02_roc_curves.png")
     fig.savefig(out, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
     plt.close()
-    print(f"  ✅ Saved: {out}")
+    print(f"  âœ… Saved: {out}")
 
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # PLOT 3: Precision-Recall Curves
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def plot_pr_curves(results):
     fig, axes = plt.subplots(1, 2, figsize=(16, 7))
     fig.patch.set_facecolor("white")
@@ -392,7 +448,7 @@ def plot_pr_curves(results):
                         label=f"{k}  (AP={r['ap']:.4f})")
         ax.set_xlabel("Recall", color="#222", fontsize=11)
         ax.set_ylabel("Precision", color="#222", fontsize=11)
-        ax.set_title(f"Precision-Recall Curve – {title}",
+        ax.set_title(f"Precision-Recall Curve â€“ {title}",
                      color="#111", fontsize=13, fontweight="bold")
         ax.tick_params(colors="#222")
         ax.spines[:].set_color("#ccc")
@@ -405,11 +461,11 @@ def plot_pr_curves(results):
     out = os.path.join(RESULTS_DIR, "03_pr_curves.png")
     fig.savefig(out, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
     plt.close()
-    print(f"  ✅ Saved: {out}")
+    print(f"  âœ… Saved: {out}")
 
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # PLOT 4: Confusion Matrices (6 model)
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def plot_confusion_matrices(results):
     fig, axes = plt.subplots(2, 4, figsize=(24, 12))
     fig.patch.set_facecolor("white")
@@ -456,11 +512,11 @@ def plot_confusion_matrices(results):
     out = os.path.join(RESULTS_DIR, "04_confusion_matrices.png")
     fig.savefig(out, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
     plt.close()
-    print(f"  ✅ Saved: {out}")
+    print(f"  âœ… Saved: {out}")
 
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # PLOT 5: Radar Chart
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def plot_radar_chart(results):
     metrics  = ["acc", "prec", "rec", "f1", "auc"]
     mlabels  = ["Accuracy", "Precision", "Recall", "F1-Score", "AUC-ROC"]
@@ -495,7 +551,7 @@ def plot_radar_chart(results):
         ax.set_yticklabels(["80%", "85%", "90%", "95%", "100%"],
                            color="#666", fontsize=8)
         ax.tick_params(colors="#222")
-        ax.set_title(f"Radar Chart – {title}", color="#111",
+        ax.set_title(f"Radar Chart â€“ {title}", color="#111",
                      fontsize=13, fontweight="bold", pad=20)
         ax.legend(loc="upper right", bbox_to_anchor=(1.35, 1.15),
                   facecolor="white", edgecolor="#ccc",
@@ -507,11 +563,11 @@ def plot_radar_chart(results):
     out = os.path.join(RESULTS_DIR, "05_radar_chart.png")
     fig.savefig(out, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
     plt.close()
-    print(f"  ✅ Saved: {out}")
+    print(f"  âœ… Saved: {out}")
 
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # PLOT 6: Summary Heatmap Table
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def plot_summary_table(results):
     metrics = ["acc", "prec", "rec", "f1", "auc"]
     mlabels = ["Accuracy", "Precision", "Recall", "F1-Score", "AUC-ROC"]
@@ -549,12 +605,12 @@ def plot_summary_table(results):
     out = os.path.join(RESULTS_DIR, "06_summary_heatmap.png")
     fig.savefig(out, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
     plt.close()
-    print(f"  ✅ Saved: {out}")
+    print(f"  âœ… Saved: {out}")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # PLOT 7: AUC Bar Chart Tersendiri
-# ══════════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def plot_auc_comparison(results):
     """
     Grafik batang horizontal khusus AUC-ROC, diurutkan dari tertinggi,
@@ -607,35 +663,52 @@ def plot_auc_comparison(results):
     plt.close()
     print(f"  Saved: {out}")
 
-# ── Main ───────────────────────────────────────────────────────────────────────
+# â”€â”€ Main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 if __name__ == "__main__":
     print("\n" + "="*60)
     print("  EVALUASI PERBANDINGAN KINERJA MODEL PHISHING DETECTION")
     print("="*60)
 
-    print("\n[1/7] Loading & evaluating models...")
+    print("\n[1/9] Loading & evaluating models...")
     results = run_evaluation()
 
-    print("\n[2/7] Plotting bar chart metrik (Acc/Prec/Rec/F1)...")
+    print("\n[2/9] Plotting bar chart metrik gabungan (Acc/Prec/Rec/F1)...")
     plot_metric_comparison(results)
 
-    print("\n[3/7] Plotting ROC curves...")
+    print("\n[3/9] Plotting bar chart metrik 37 fitur URL...")
+    plot_metric_comparison_group(
+        results,
+        group_keys=["RF-37", "XGB-37", "Stack-37", "Hybrid-37"],
+        title="Perbandingan Kinerja Model â€“ 37 Fitur URL",
+        filename="01b_metric_comparison_37.png",
+    )
+
+    print("\n[4/9] Plotting bar chart metrik 81 fitur Hybrid...")
+    plot_metric_comparison_group(
+        results,
+        group_keys=["RF-81", "XGB-81", "Stack-81", "Hybrid-81"],
+        title="Perbandingan Kinerja Model â€“ 81 Fitur Hybrid",
+        filename="01c_metric_comparison_81.png",
+    )
+
+    print("\n[5/9] Plotting ROC curves...")
     plot_roc_curves(results)
 
-    print("\n[4/7] Plotting Precision-Recall curves...")
+    print("\n[6/9] Plotting Precision-Recall curves...")
     plot_pr_curves(results)
 
-    print("\n[5/7] Plotting confusion matrices...")
+    print("\n[7/9] Plotting confusion matrices...")
     plot_confusion_matrices(results)
 
-    print("\n[6/7] Plotting radar chart...")
+    print("\n[8/9] Plotting radar chart...")
     plot_radar_chart(results)
 
-    print("\n[7/7] Plotting summary heatmap & AUC comparison...")
+    print("\n[9/9] Plotting summary heatmap & AUC comparison...")
     plot_summary_table(results)
     plot_auc_comparison(results)
 
 
     print(f"\nSemua grafik tersimpan di folder: {RESULTS_DIR}")
-    print("   7 file PNG tersedia di folder results/\n")
+    print("   9 file PNG tersedia di folder results/\n")
+
 
