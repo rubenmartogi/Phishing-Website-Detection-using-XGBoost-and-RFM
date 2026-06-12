@@ -41,6 +41,40 @@ SHORTENERS = {"bit.ly","goo.gl","tinyurl.com","ow.ly","t.co","is.gd","buff.ly","
 PHISH_HINTS = ["login","verify","update","secure","account","bank","paypal","apple","microsoft","confirm","signin","password"]
 BRANDS = ["google","facebook","apple","microsoft","amazon","paypal","instagram","whatsapp","telegram","netflix","github","linkedin"]
 
+# Penjelasan tiap rule pada rule-based prefilter (24 rule, dipakai untuk konteks LLM reasoning)
+RULE_REASON_MAP = {
+    # Sangat Penting
+    "suspicious_tld":     "TLD domain termasuk dalam daftar TLD yang sering disalahgunakan untuk phishing, spam, dan malware (misalnya .xyz, .top, .click, .icu, .pw, dll), sehingga menjadi indikator langsung domain mencurigakan.",
+    "random_domain":      "Nama domain terdeteksi acak/tidak bermakna (mirip hasil generate otomatis/DGA), yang umum dipakai pada domain phishing berumur pendek dan bereputasi rendah.",
+    "ip":                 "URL menggunakan alamat IP secara langsung sebagai host (bukan nama domain), taktik umum untuk menyamarkan identitas domain asli pada phishing.",
+    "http_in_path":       "Kata 'http' muncul pada path URL, mengindikasikan upaya penyamaran (URL-in-URL) agar URL terlihat seperti tautan yang sah.",
+    # Penting (bobot x2)
+    "nb_at":              "Terdapat simbol '@' pada URL, yang dapat menyembunyikan alamat tujuan sebenarnya karena bagian sebelum '@' diabaikan browser.",
+    "nb_subdomains":      "Jumlah subdomain lebih dari 3, membuat URL terlihat kompleks dan menyerupai struktur domain resmi untuk mengelabui pengguna.",
+    "nb_dots":            "Jumlah titik (.) pada URL lebih dari 4, menunjukkan struktur domain yang kompleks dan sering dipakai untuk spoofing domain.",
+    "nb_slash":           "Jumlah garis miring (/) pada URL lebih dari 7, membuat struktur path lebih panjang dan membingungkan pengguna.",
+    "length_hostname":    "Panjang hostname lebih dari 30 karakter, sering dipakai untuk menyembunyikan domain utama melalui obfuscation.",
+    "nb_percent":         "Jumlah karakter persen (%) pada URL lebih dari 5, mengindikasikan encoding karakter berlebihan untuk menyamarkan isi URL.",
+    "nb_tilde":           "Terdapat karakter tilde (~) pada URL, jarang muncul pada URL normal dan dapat menunjukkan pola manipulatif.",
+    "nb_semicolumn":      "Terdapat karakter titik koma (;) pada URL, jarang dipakai pada URL normal dan dapat dimanfaatkan untuk memanipulasi query/path.",
+    "nb_star":            "Terdapat karakter bintang (*) pada URL, tidak umum dipakai pada URL normal dan dapat menunjukkan pola manipulasi.",
+    "nb_comma":           "Terdapat karakter koma (,) pada URL, yang dapat dipakai untuk memanipulasi parameter dan struktur URL.",
+    "nb_dollar":          "Terdapat simbol dolar ($) pada URL, jarang muncul pada URL situs resmi dan bisa menjadi indikator manipulasi.",
+    "nb_qm":              "Jumlah tanda tanya (?) pada URL lebih dari 2, query string berlebihan sering dipakai untuk menyembunyikan parameter berbahaya.",
+    "nb_colon":           "Jumlah titik dua (:) pada URL lebih dari 1 (di luar protokol), dapat dipakai untuk memanipulasi protokol atau port URL.",
+    "nb_eq":              "Jumlah simbol sama dengan (=) pada URL lebih dari 8, menunjukkan parameter URL yang kompleks dan manipulatif.",
+    "nb_and":             "Jumlah simbol '&' pada URL lebih dari 3, banyak parameter yang dipisahkan '&' sering dipakai untuk menyamarkan URL phishing.",
+    "nb_hyphens":         "Jumlah tanda hubung (-) pada URL lebih dari 3, sering dipakai membuat domain phishing menyerupai nama website yang resmi.",
+    "nb_underscore":      "Jumlah garis bawah (_) pada URL lebih dari 3, dipakai untuk memodifikasi struktur URL agar terlihat berbeda dari domain aslinya.",
+    # Cukup Penting (bobot x1)
+    "ratio_digits_url":   "Lebih dari 30% karakter pada hostname berupa angka, sering menunjukkan domain acak atau hasil generate otomatis.",
+    "port":               "URL menggunakan port di luar port standar (selain 21, 22, 23, 80, 443, 445, 1433, 1521, 3306, 3389), menjadi indikator tambahan phishing meski tidak kuat jika berdiri sendiri.",
+    "shortening_service": "URL menggunakan layanan pemendek tautan (misalnya bit.ly, tinyurl), yang sering dimanfaatkan untuk menyembunyikan tujuan asli URL.",
+}
+
+# Label kategori bobot rule, dipakai untuk konteks LLM reasoning
+RULE_LEVEL_LABEL = {"vi_hits": "Sangat Penting", "imp_hits": "Penting", "less_hits": "Cukup Penting"}
+
 WEB_CONTENT_KEYS = {
     "nb_hyperlinks","ratio_intHyperlinks","ratio_extHyperlinks","nb_extCSS",
     "ratio_extRedirection","ratio_extErrors","login_form","external_favicon",
@@ -311,16 +345,14 @@ def extract_features(url, include_web_content):
 
 def rule_based_eval(url, return_detail=False):
     feats = extract_url_features(url)
-    # Sangat Penting: satu fitur saja → langsung Phishing (sesuai dokumen TASI Bab 3.4)
+    # Sangat Penting: satu fitur saja → langsung Phishing (24 rule, kategori "Sangat Penting")
     very_important = {
         "suspicious_tld":     feats.get("suspicious_tld",0)==1,
-        "ip":                 feats.get("ip",0)==1,
         "random_domain":      feats.get("random_domain",0)==1,
-        "shortening_service": feats.get("shortening_service",0)==1,
+        "ip":                 feats.get("ip",0)==1,
         "http_in_path":       feats.get("http_in_path",0)==1,
-        "https_token":        feats.get("https_token",0)==1,
     }
-    # Penting: bobot ×2 (sesuai dokumen TASI Bab 3.4)
+    # Penting: bobot ×2 (24 rule, kategori "Penting")
     important = {
         "nb_at":          feats.get("nb_at",0)>=1,
         "nb_subdomains":  feats.get("nb_subdomains",0)>3,
@@ -340,10 +372,11 @@ def rule_based_eval(url, return_detail=False):
         "nb_hyphens":     feats.get("nb_hyphens",0)>3,
         "nb_underscore":  feats.get("nb_underscore",0)>3,
     }
-    # Cukup Penting: bobot ×1 (sesuai dokumen TASI Bab 3.4)
+    # Cukup Penting: bobot ×1 (24 rule, kategori "Cukup Penting")
     less_important = {
-        "ratio_digits_url": feats.get("ratio_digits_url",0)>0.3,
-        "port":             feats.get("port",0)==1,
+        "ratio_digits_url":   feats.get("ratio_digits_url",0)>0.3,
+        "port":               feats.get("port",0)==1,
+        "shortening_service": feats.get("shortening_service",0)==1,
     }
     vi_hits = [k for k,v in very_important.items() if v]
     imp_hits = [k for k,v in important.items() if v]
@@ -607,13 +640,48 @@ def get_phishing_risk_direction(feature_name, feature_value):
     return "NEUTRAL", "Nilai fitur tidak memenuhi kondisi ekstrem phishing maupun benign secara definitif"
 
 # ── Perbaikan Prompt Builder (Strict Context & Anti Malu-maluin) ──────────────────
-def build_llm_prompt(url, category, p_phish, model_main, top_features_with_reasons, rekomendasi_tetap):
+def build_llm_prompt(url, category, p_phish, model_main, top_features_with_reasons, rekomendasi_tetap, decision_source=None):
     lines = []
     for i, f in enumerate(top_features_with_reasons, 1):
         nilai_str = f"Nilai: {f['value']} | " if "value" in f else ""
         lines.append(f"  {i}. Fitur: {f['display_name']} | {nilai_str}Status: {f['impact']} | Hasil Ekstraksi: {f['reason']}")
-    
+
     features_block = "\n".join(lines) if lines else "  (Data fitur tidak tersedia)"
+
+    is_rule_based = (decision_source == "rule_based_prefilter_phishing")
+
+    konteks_model = (
+        "- Sumber Keputusan: Rule-Based Prefilter (BUKAN model machine learning). URL ini langsung divonis "
+        "PHISHING karena melanggar satu atau lebih rule keamanan URL yang tercantum pada DATA INTEGRITAS FITUR "
+        "di bawah, sebelum sempat dievaluasi oleh model machine learning.\n"
+        if is_rule_based else ""
+    )
+
+    instruksi = [
+        f"Jelaskan secara logis mengapa skor bisa bernilai {p_phish:.2f} berdasarkan data fitur di atas.",
+        "Fokuskan penjelasan pada dukungan untuk Kesimpulan Akhir: jika hasilnya BENIGN, jelaskan bahwa fitur "
+        "utama mendukung benign; jika hasilnya PHISHING, jelaskan bahwa fitur utama mendukung phishing.",
+        "Jangan menggunakan kalimat yang meragukan kesimpulan akhir. Tulis dengan tegas sesuai hasil deteksi.",
+        "JANGAN PERNAH mengada-ada atau membawa nama fitur yang tidak tertulis pada data di atas!",
+    ]
+
+    if is_rule_based:
+        instruksi.append(
+            "Karena Sumber Keputusan adalah Rule-Based Prefilter, kamu WAJIB menyebutkan secara EKSPLISIT "
+            "nama rule/fitur pada DATA INTEGRITAS FITUR yang terpicu (gunakan nama pada kolom 'Fitur') beserta "
+            "alasannya (kolom 'Hasil Ekstraksi'), karena rule-rule itulah satu-satunya alasan URL ini "
+            "dikategorikan PHISHING."
+        )
+        instruksi.append(
+            "JANGAN menyebut SHAP, Random Forest, XGBoost, atau analisis model machine learning lain sebagai "
+            "dasar keputusan — keputusan ini sepenuhnya berasal dari rule-based prefilter di atas."
+        )
+
+    instruksi.append(
+        f"Kamu HARUS mengakhiri kalimat penjelasanmu tepat dengan teks instruksi ini tanpa diubah: {rekomendasi_tetap}"
+    )
+
+    instruksi_block = "\n".join(f"{i}. {teks}" for i, teks in enumerate(instruksi, 1))
 
     return (
         f"Kamu adalah analis keamanan siber profesional. Tugasmu adalah menulis penjelasan ringkas (3-4 kalimat) "
@@ -622,16 +690,12 @@ def build_llm_prompt(url, category, p_phish, model_main, top_features_with_reaso
         f"- URL yang diperiksa: {url}\n"
         f"- Kesimpulan Akhir: {category.upper()}\n"
         f"- Probabilitas Phishing: {p_phish:.2f} (Threshold Bahaya >= {FINAL_THRESHOLD})\n"
-        f"- Model Utama: {model_main}\n\n"
+        f"- Model Utama: {model_main}\n"
+        f"{konteks_model}\n"
         f"DATA INTEGRITAS FITUR (JANGAN DIUBAH ATAU DIPUTARBALIKKAN):\n"
         f"{features_block}\n\n"
         f"PETUNJUK PENULISAN PENJELASAN:\n"
-        f"1. Jelaskan secara logis mengapa skor bisa bernilai {p_phish:.2f} berdasarkan data fitur di atas.\n"
-        f"2. Fokuskan penjelasan pada dukungan untuk Kesimpulan Akhir: jika hasilnya BENIGN, jelaskan bahwa fitur utama mendukung benign; "
-        f"jika hasilnya PHISHING, jelaskan bahwa fitur utama mendukung phishing.\n"
-        f"3. Jangan menggunakan kalimat yang meragukan kesimpulan akhir. Tulis dengan tegas sesuai hasil deteksi.\n"
-        f"4. JANGAN PERNAH mengada-ada atau membawa nama fitur yang tidak tertulis pada data di atas!\n"
-        f"5. Kamu HARUS mengakhiri kalimat penjelasanmu tepat dengan teks instruksi ini tanpa diubah: {rekomendasi_tetap}"
+        f"{instruksi_block}"
     )
 
 def fetch_llm_reasoning_safe(prompt):
@@ -781,47 +845,72 @@ def generate_explanation(url, feats_full, cols, rf_prob, xgb_prob, stack_prob,
 
     top_features_reasons = []
     top_features = []
-    for f in shap_items:
-        feat_val = feats_full.get(f["name"], 0)
-        rule_dir, reason = get_phishing_risk_direction(f["name"], feat_val)
-        shap_dir = f["direction"]
 
-        # Prioritas: SHAP (kebenaran matematis model)
-        # Rule hanya tiebreaker jika SHAP nyaris nol
-        if abs(f["shap_signed"]) < 1e-6:
-            display_impact = rule_dir if rule_dir != "NEUTRAL" else shap_dir
-        elif f["name"] in WEB_FETCH_DEPENDENT and feat_val == 0:
-            # Nilai 0 karena API gagal → percayai arah SHAP
-            display_impact = shap_dir
-            if shap_dir == "BENIGN":
-                reason = "Berdasarkan analisis model, fitur ini berkontribusi pada keamanan URL"
-            elif shap_dir == "PHISHING":
-                reason = "Berdasarkan analisis model, fitur ini menambah risiko phishing"
+    if decision_source == "rule_based_prefilter_phishing":
+        # Tidak ada model ML/SHAP yang dipakai — keputusan murni dari rule-based prefilter.
+        # Bangun daftar fitur LANGSUNG dari rule yang benar-benar terpicu (vi_hits, imp_hits, less_hits)
+        # supaya LLM tahu PERSIS rule mana yang membuat URL ini divonis phishing.
+        for level_key, level_label, level_weight in (
+            ("vi_hits", "Sangat Penting", 3.0),
+            ("imp_hits", "Penting", 2.0),
+            ("less_hits", "Cukup Penting", 1.0),
+        ):
+            for fname in (rule_detail or {}).get(level_key, []):
+                feat_val = feats_full.get(fname, 0)
+                reason = RULE_REASON_MAP.get(fname, "Rule ini terpicu dan menjadi salah satu indikator phishing.")
+                top_features_reasons.append({
+                    "display_name": FEATURE_LABEL_MAP.get(fname, fname.replace("_", " ")),
+                    "value": feat_val,
+                    "impact": "PHISHING",
+                    "reason": f"[{level_label}] {reason}",
+                })
+                top_features.append({
+                    "name": fname, "value": feat_val, "impact": "PHISHING", "reason": reason,
+                    "shap_value": level_weight, "shap_value_signed": level_weight, "abs_shap": level_weight,
+                    "shap_direction": "PHISHING", "rule_level": level_label,
+                })
+    else:
+        for f in shap_items:
+            feat_val = feats_full.get(f["name"], 0)
+            rule_dir, reason = get_phishing_risk_direction(f["name"], feat_val)
+            shap_dir = f["direction"]
+
+            # Prioritas: SHAP (kebenaran matematis model)
+            # Rule hanya tiebreaker jika SHAP nyaris nol
+            if abs(f["shap_signed"]) < 1e-6:
+                display_impact = rule_dir if rule_dir != "NEUTRAL" else shap_dir
+            elif f["name"] in WEB_FETCH_DEPENDENT and feat_val == 0:
+                # Nilai 0 karena API gagal → percayai arah SHAP
+                display_impact = shap_dir
+                if shap_dir == "BENIGN":
+                    reason = "Berdasarkan analisis model, fitur ini berkontribusi pada keamanan URL"
+                elif shap_dir == "PHISHING":
+                    reason = "Berdasarkan analisis model, fitur ini menambah risiko phishing"
+                else:
+                    reason = "Tidak ada dampak signifikan dari fitur ini"
+            elif rule_dir == shap_dir or (rule_dir != "NEUTRAL" and shap_dir == "NEUTRAL"):
+                display_impact = rule_dir  # sepakat atau rule punya pendapat, SHAP netral
             else:
-                reason = "Tidak ada dampak signifikan dari fitur ini"
-        elif rule_dir == shap_dir or (rule_dir != "NEUTRAL" and shap_dir == "NEUTRAL"):
-            display_impact = rule_dir  # sepakat atau rule punya pendapat, SHAP netral
-        else:
-            # SHAP dan rule tidak sepakat → percayai SHAP, perbarui reason
-            display_impact = shap_dir
-            if shap_dir == "BENIGN":
-                reason = "Analisis model: fitur ini mendukung keamanan URL"
-            elif shap_dir == "PHISHING":
-                reason = "Analisis model: fitur ini menambah indikasi phishing"
+                # SHAP dan rule tidak sepakat → percayai SHAP, perbarui reason
+                display_impact = shap_dir
+                if shap_dir == "BENIGN":
+                    reason = "Analisis model: fitur ini mendukung keamanan URL"
+                elif shap_dir == "PHISHING":
+                    reason = "Analisis model: fitur ini menambah indikasi phishing"
 
-        top_features_reasons.append({
-            "display_name": FEATURE_LABEL_MAP.get(f["name"], f["name"].replace("_", " ")),
-            "value": feat_val,
-            "impact": display_impact,
-            "reason": reason
-        })
-        top_features.append({
-            "name": f["name"], "value": feat_val, "impact": display_impact, "reason": reason,
-            "shap_value": f["shap_signed"], "shap_value_signed": f["shap_signed"],
-            "abs_shap": f["abs_shap"], "shap_direction": shap_dir,
-        })
+            top_features_reasons.append({
+                "display_name": FEATURE_LABEL_MAP.get(f["name"], f["name"].replace("_", " ")),
+                "value": feat_val,
+                "impact": display_impact,
+                "reason": reason
+            })
+            top_features.append({
+                "name": f["name"], "value": feat_val, "impact": display_impact, "reason": reason,
+                "shap_value": f["shap_signed"], "shap_value_signed": f["shap_signed"],
+                "abs_shap": f["abs_shap"], "shap_direction": shap_dir,
+            })
 
-    prompt = build_llm_prompt(url, category, p_phish, model_main, top_features_reasons, rekomendasi_tetap)
+    prompt = build_llm_prompt(url, category, p_phish, model_main, top_features_reasons, rekomendasi_tetap, decision_source)
     future = executor.submit(fetch_llm_reasoning_safe, prompt)
     
     try:
