@@ -1,4 +1,4 @@
-﻿"""
+"""
 evaluate_performance.py
 =======================
 Script evaluasi perbandingan kinerja model:
@@ -157,45 +157,50 @@ def rule_flag_from_df(X_df: pd.DataFrame) -> np.ndarray:
     vectorized pada DataFrame fitur. Kembalikan array 0/1 per baris.
       1 = rule mendeteksi phishing
       0 = rule tidak mendeteksi (lolos ke ML)
+
+    24 rule terbagi 3 kategori (identik dengan rule_based_eval() di app.py):
+      - Sangat Penting (Very Important): salah satu saja -> langsung Phishing (4 rule)
+      - Penting (Important)            : skor x2  (17 rule)
+      - Cukup Penting (Less Important) : skor x1  (3 rule)
+    Threshold: vi_hits OR risk_score >= 5 -> Phishing
     """
     def col(name, default=0):
         return X_df[name].fillna(default).values if name in X_df.columns else np.full(len(X_df), default)
 
-    # Very important (salah satu saja â†’ Phishing)
+    # Sangat Penting: salah satu saja -> langsung Phishing (4 rule)
     vi = (
-        (col("suspicious_tld")   == 1) |
-        (col("nb_at")            >= 1) |
-        (col("ip")               == 1) |
-        (col("nb_underscore")    >  3)
+        (col("suspicious_tld") == 1) |
+        (col("random_domain")  == 1) |
+        (col("ip")             == 1) |
+        (col("http_in_path")   == 1)
     )
 
-    # Important (skor Ã—2)
+    # Penting: skor x2 (17 rule)
     imp = (
-        (col("ratio_digits_url") >  0.3).astype(int) +
-        (col("nb_subdomains")    >  3  ).astype(int) +
-        (col("nb_percent")       >  5  ).astype(int) +
-        (col("nb_tilde")         >= 1  ).astype(int) +
-        (col("nb_semicolumn")    >= 1  ).astype(int) +
-        (col("nb_star")          >= 1  ).astype(int) +
-        (col("nb_comma")         >= 1  ).astype(int) +
-        (col("random_domain")    == 1  ).astype(int)
+        (col("nb_at")          >= 1).astype(int) +
+        (col("nb_subdomains")  >  3).astype(int) +
+        (col("nb_dots")        >  4).astype(int) +
+        (col("nb_slash")       >  7).astype(int) +
+        (col("length_hostname")> 30).astype(int) +
+        (col("nb_percent")     >  5).astype(int) +
+        (col("nb_tilde")       >= 1).astype(int) +
+        (col("nb_semicolumn")  >= 1).astype(int) +
+        (col("nb_star")        >= 1).astype(int) +
+        (col("nb_comma")       >= 1).astype(int) +
+        (col("nb_dollar")      >= 1).astype(int) +
+        (col("nb_qm")          >  2).astype(int) +
+        (col("nb_colon")       >  1).astype(int) +
+        (col("nb_eq")          >  8).astype(int) +
+        (col("nb_and")         >  3).astype(int) +
+        (col("nb_hyphens")     >  3).astype(int) +
+        (col("nb_underscore")  >  3).astype(int)
     )
 
-    # Less important (skor Ã—1)
+    # Cukup Penting: skor x1 (3 rule)
     less = (
-        (col("length_hostname")  > 30).astype(int) +
-        (col("nb_dollar")        >= 1).astype(int) +
-        (col("nb_qm")            >  2).astype(int) +
-        (col("nb_colon")         >  1).astype(int) +
-        (col("nb_eq")            >  8).astype(int) +
-        (col("nb_dots")          >  4).astype(int) +
-        (col("nb_slash")         >  7).astype(int) +
-        (col("nb_and")           >  3).astype(int) +
-        (col("nb_hyphens")       >  3).astype(int) +
-        (col("http_in_path")     == 1).astype(int) +
-        (col("https_token")      == 1).astype(int) +
-        (col("port")             == 1).astype(int) +
-        (col("shortening_service") == 1).astype(int)
+        (col("ratio_digits_url")   > 0.3).astype(int) +
+        (col("port")               == 1 ).astype(int) +
+        (col("shortening_service") == 1 ).astype(int)
     )
 
     risk_score = 2 * imp + less
@@ -319,7 +324,7 @@ def plot_metric_comparison(results):
     ax.set_xticks(x)
     ax.set_xticklabels(mlabels, fontsize=13, color="#222")
     ax.set_ylabel("Score (%)", fontsize=13, color="#222")
-    ax.set_title("Perbandingan Kinerja Model", fontsize=16,
+    ax.set_title("Perbandingan Kinerja Semua Model (Threshold=0.6)", fontsize=16,
                  fontweight="bold", color="#111", pad=15)
     ax.set_ylim(70, 108)
     ax.tick_params(colors="#222")
@@ -654,8 +659,16 @@ def plot_auc_comparison(results):
     ax.xaxis.grid(True, color="#ddd", linestyle="--", alpha=0.8)
     ax.set_axisbelow(True)
     ax.invert_yaxis()   # Model terbaik di atas
-    ax.legend(loc="upper right", fontsize=10,
-              facecolor="white", edgecolor="#ccc", labelcolor="#333")
+    from matplotlib.lines import Line2D
+    import matplotlib.patches as mpatches
+    legend_elements = [
+        mpatches.Patch(color="#42A5F5", label="Kelompok Biru: Model 37 Fitur (URL)"),
+        mpatches.Patch(color="#26A69A", label="Kelompok Teal: Model 81 Fitur (Hybrid)"),
+        Line2D([0], [0], color="#e74c3c", linestyle="--", lw=1.5, label="Threshold Sangat Baik (95%)"),
+        Line2D([0], [0], color="#27ae60", linestyle="--", lw=1.5, label="Threshold Hampir Sempurna (99%)")
+    ]
+    ax.legend(handles=legend_elements, loc="lower right", fontsize=10,
+              facecolor="white", edgecolor="#ccc", labelcolor="#333", borderpad=1)
 
     plt.tight_layout()
     out = os.path.join(RESULTS_DIR, "07_auc_comparison.png")
@@ -710,5 +723,3 @@ if __name__ == "__main__":
 
     print(f"\nSemua grafik tersimpan di folder: {RESULTS_DIR}")
     print("   9 file PNG tersedia di folder results/\n")
-
-
