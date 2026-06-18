@@ -26,7 +26,56 @@ try:
 except Exception:
     BeautifulSoup = None
 
-# ── Konstanta ──────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════
+# ██  BAGIAN 1 — KONSTANTA & KONFIGURASI GLOBAL
+# ══════════════════════════════════════════════════════════════════════
+#
+#  THRESHOLD & MODE KEPUTUSAN
+#  ─────────────────────────────────────────────────────────────────────
+#  FINAL_THRESHOLD = 0.6
+#    → Batas probabilitas phishing. Jika prob >= 0.6 → label = PHISHING.
+#    → Nilai ini dipakai di BAGIAN 14 (/predict) saat build_response().
+#
+#  DEFAULT_DECISION_MODE = "hybrid_prefilter"
+#    → Mode default jika user tidak kirim parameter mode.
+#    → Alur: rule-based dulu → jika lolos → ML (RF + XGB + Stacking).
+#
+#  PREFILTER_PHISHING_MIN_CONF = 0.95
+#    → Jika rule-based prefilter vonis PHISHING, confidence minimum = 95%.
+#    → Artinya: URL yang langsung tertangkap rule tidak bisa dapat prob < 0.95.
+#
+#  DAFTAR ACUAN EKSTRAKSI FITUR (dipakai di BAGIAN 5 & 7)
+#  ─────────────────────────────────────────────────────────────────────
+#  SUSPICIOUS_TLD  → 24 TLD yang paling sering dipakai domain phishing/spam.
+#                    Dipakai oleh fitur "suspicious_tld" di extract_url_features().
+#
+#  STANDARD_PORTS  → Port yang dianggap normal (80, 443, dll).
+#                    Jika URL pakai port di luar ini → fitur "port" = 1 (mencurigakan).
+#
+#  SHORTENERS      → Layanan pemendek URL (bit.ly, tinyurl, dll).
+#                    Jika domain cocok → fitur "shortening_service" = 1.
+#
+#  PHISH_HINTS     → Kata kunci seperti "login", "verify", "secure".
+#                    Dihitung kemunculannya → fitur "phish_hints" (nilai 0–N).
+#
+#  BRANDS          → Nama brand besar (google, paypal, dll).
+#                    Dipakai untuk 3 fitur: domain_in_brand, brand_in_subdomain, brand_in_path.
+#
+#  RULE_REASON_MAP (dipakai di BAGIAN 7 & 12)
+#  ─────────────────────────────────────────────────────────────────────
+#  Peta teks alasan untuk tiap rule yang terpicu.
+#  24 rule dibagi 3 tingkat: Sangat Penting (4), Penting (17), Cukup Penting (3).
+#  Teks ini dikirim ke LLM (BAGIAN 12) agar penjelasan LLM berbasis rule
+#  yang benar-benar terpicu — bukan karangan model bahasa.
+#
+#  WEB_CONTENT_KEYS (dipakai di BAGIAN 8 — ★ TITIK KRITIS PEMILIHAN 81/37)
+#  ─────────────────────────────────────────────────────────────────────
+#  Kumpulan nama fitur yang HANYA ada jika konten web berhasil diambil.
+#  Di BAGIAN 8 (get_model_and_features), sistem mengecek:
+#    → Apakah ADA nilai non-nol di antara WEB_CONTENT_KEYS?
+#    → Jika YA  → pakai model _81 (81 fitur: URL + web content)
+#    → Jika TIDAK → pakai model _37 (37 fitur: URL saja)
+#  Daftar ini yang menentukan kapan sistem "naik kelas" ke mode 81 fitur.
 PHISHING_CLASS_VALUE    = 1
 FINAL_THRESHOLD         = 0.6
 DEFAULT_USE_PREFILTER   = True
@@ -88,9 +137,20 @@ _TLD_EXTRACTOR = tldextract.TLDExtract(suffix_list_urls=None)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app = Flask(__name__, static_folder=os.path.join(BASE_DIR, "static"))
 
+# ★ PATH LOG CSV — DIPANGGIL DI AKHIR SETIAP REQUEST /predict
+# File ini mencatat semua hasil deteksi: URL, mode (37/81), semua nilai fitur,
+# top SHAP, dan penjelasan LLM. Penulisan dilindungi threading lock (BAGIAN 13).
+# Jika file terbuka di Excel saat request masuk → request langsung ditolak (BAGIAN 2).
 # Menggunakan ekstensi CSV murni untuk stabilitas penuh saat dibaca Microsoft Excel
 LOG_PATH = os.path.join(BASE_DIR, "log_feature_extraction.csv")
 
+
+# ══════════════════════════════════════════════════════════════════════
+# ██  BAGIAN 2 — PENGECEKAN FILE LOG (LOCK DETECTION)
+# ══════════════════════════════════════════════════════════════════════
+# Mengecek apakah file CSV log sedang dibuka aplikasi lain (misal Excel).
+# Jika terkunci → request deteksi akan ditolak dengan pesan error.
+# Ini penting agar tidak terjadi konflik tulis saat logging berlangsung.
 def check_log_locked():
     if not os.path.exists(LOG_PATH):
         return False, ""
@@ -129,11 +189,23 @@ def check_log_locked():
 import threading as _threading
 _log_lock = _threading.Lock()
 
+
+# ══════════════════════════════════════════════════════════════════════
+# ██  BAGIAN 3 — INISIALISASI MODEL (STARTUP CACHE)
+# ══════════════════════════════════════════════════════════════════════
+# Memuat semua model ML (.pkl) ke memori saat server pertama kali jalan.
+# Ada 2 mode: _37 (hanya fitur URL, 37 fitur) dan _81 (URL + konten web, 81 fitur).
+# Tiap mode punya: Random Forest, XGBoost, Meta-Learner (Stacking), dan daftar kolom fitur.
 executor = ThreadPoolExecutor(max_workers=4)
 GLOBAL_MODELS = {}
 
 def init_startup_cache():
     print("[STARTUP] Inisialisasi Cache Model...")
+    # ★ MUAT MODEL 37 DAN 81 — keduanya dimuat saat server start
+    # Suffix "_37": model untuk 37 fitur URL saja (fallback jika web fetch gagal)
+    # Suffix "_81": model untuk 81 fitur URL + konten web (mode utama)
+    # Tiap suffix punya 3 model: rf (Random Forest), xgb (XGBoost), meta (Stacking LR)
+    # + file feature_columns{suffix}.txt → urutan kolom fitur saat training (WAJIB cocok)
     for suffix in ["_37", "_81"]:
         try:
             GLOBAL_MODELS[f"rf{suffix}"] = pickle.load(open(os.path.join(BASE_DIR, f"random_forest_model{suffix}.pkl"), "rb"))
@@ -159,6 +231,17 @@ try:
 except Exception:
     FEATURE_COLUMNS_81 = []
 
+
+# ══════════════════════════════════════════════════════════════════════
+# ██  BAGIAN 4 — FUNGSI UTILITAS UMUM
+# ══════════════════════════════════════════════════════════════════════
+# Kumpulan fungsi pembantu kecil yang dipakai di banyak tempat:
+#   - clamp01: pastikan nilai probabilitas ada di rentang [0, 1]
+#   - safe_avg: rata-rata probabilitas yang aman (skip nilai None)
+#   - to_float: konversi aman ke float, handle NaN/Inf
+#   - entropy: hitung entropi string (dipakai cek domain acak)
+#   - is_ip: cek apakah hostname adalah IP address
+#   - parse_url, _extract_parts, _word_stats: parsing URL jadi komponen
 def app_path(*parts): return os.path.join(BASE_DIR, *parts)
 def clamp01(v): return float(min(max(v, 0.0), 1.0))
 def safe_avg(*probs):
@@ -215,6 +298,15 @@ def is_valid_url(url):
         ipaddress.ip_address(host); return True
     except: return False
 
+
+# ══════════════════════════════════════════════════════════════════════
+# ██  BAGIAN 5 — EKSTRAKSI FITUR URL (37 FITUR)
+# ══════════════════════════════════════════════════════════════════════
+# Mengurai struktur URL dan menghitung 37 fitur numerik dari URL-nya saja
+# (tanpa perlu mengakses konten halaman web).
+# Contoh fitur: panjang URL, jumlah titik/slash/@, TLD mencurigakan,
+# entropy domain, keberadaan brand, penggunaan IP, dll.
+# Pakai @lru_cache agar URL yang sama tidak diekstrak ulang.
 @lru_cache(maxsize=128)
 def extract_url_features(url):
     full, parsed, hostname, path = parse_url(url)
@@ -238,39 +330,66 @@ def extract_url_features(url):
     brand_in_subdomain = 1 if any(b in subdomain for b in BRANDS) else 0
     brand_in_path = 1 if any(b in path.lower() for b in BRANDS) else 0
     statistical_report = 1 if (suspicious_tld_flag or is_ip(hostname) or full.count("@")>=1 or random_domain) else 0
+    # ★ RETURN 37 FITUR URL SAJA
+    # Urutan ini harus cocok persis dengan feature_columns_37.txt yang dipakai saat training.
+    # Fitur di luar 37 ini (nb_external_redirection, length_words_raw, char_repeat,
+    # word stats, phish_hints, brand/suspicious_tld, statistical_report, dst.)
+    # adalah bagian dari 81 fitur dan HANYA muncul setelah extract_web_content_features()
+    # dipanggil dan hasilnya di-merge via extract_features().
+    # JANGAN tambahkan fitur baru di sini tanpa memperbarui feature_columns_37.txt.
     return {
-        "length_url": len(full), "length_hostname": len(hostname), "ip": is_ip(hostname),
-        "nb_dots": full.count("."), "nb_hyphens": full.count("-"), "nb_at": full.count("@"),
-        "nb_qm": full.count("?"), "nb_and": full.count("&"), "nb_eq": full.count("="),
-        "nb_underscore": full.count("_"), "nb_tilde": full.count("~"), "nb_percent": full.count("%"),
-        "nb_slash": full.count("/"), "nb_star": full.count("*"), "nb_colon": full.count(":"),
-        "nb_comma": full.count(","), "nb_semicolumn": full.count(";"), "nb_dollar": full.count("$"),
-        "nb_space": full.count(" "), "nb_www": 1 if "www" in hostname else 0,
-        "nb_com": full.count(".com"), "nb_dslash": full.count("//"),
-        "http_in_path": 1 if "http" in path else 0,
-        "https_token": 1 if "https" in full.replace("https://","") else 0,
-        "ratio_digits_url": digits_url/max(len(full),1),
-        "ratio_digits_host": digits_host/max(len(hostname),1),
-        "punycode": 1 if "xn--" in hostname else 0, "port": port_flag,
-        "tld_in_path": 1 if tld and tld in path else 0,
-        "tld_in_subdomain": 1 if tld and tld in subdomain else 0,
+        "length_url":         len(full),
+        "length_hostname":    len(hostname),
+        "ip":                 is_ip(hostname),
+        "nb_dots":            full.count("."),
+        "nb_hyphens":         full.count("-"),
+        "nb_at":              full.count("@"),
+        "nb_qm":              full.count("?"),
+        "nb_and":             full.count("&"),
+        "nb_eq":              full.count("="),
+        "nb_underscore":      full.count("_"),
+        "nb_tilde":           full.count("~"),
+        "nb_percent":         full.count("%"),
+        "nb_slash":           full.count("/"),
+        "nb_star":            full.count("*"),
+        "nb_colon":           full.count(":"),
+        "nb_comma":           full.count(","),
+        "nb_semicolumn":      full.count(";"),
+        "nb_dollar":          full.count("$"),
+        "nb_space":           full.count(" "),
+        "nb_www":             1 if "www" in hostname else 0,
+        "nb_com":             full.count(".com"),
+        "nb_dslash":          full.count("//"),
+        "http_in_path":       1 if "http" in path else 0,
+        "https_token":        1 if "https" in full.replace("https://","") else 0,
+        "ratio_digits_url":   digits_url / max(len(full), 1),
+        "ratio_digits_host":  digits_host / max(len(hostname), 1),
+        "punycode":           1 if "xn--" in hostname else 0,
+        "port":               port_flag,
+        "tld_in_path":        1 if tld and tld in path else 0,
+        "tld_in_subdomain":   1 if tld and tld in subdomain else 0,
         "abnormal_subdomain": 1 if ("http" in subdomain or "https" in subdomain) else 0,
-        "nb_subdomains": len(subdomain.split(".")) if subdomain else 0,
-        "prefix_suffix": prefix_suffix, "random_domain": random_domain,
-        "shortening_service": shortening_service, "path_extension": path_extension,
-        "nb_redirection": nb_redirection, "nb_external_redirection": 0,
-        "length_words_raw": words_raw,
-        "char_repeat": sum(1 for i in range(1,len(full)) if full[i]==full[i-1]),
-        "shortest_words_raw": shortest_raw, "shortest_word_host": shortest_host,
-        "shortest_word_path": shortest_path, "longest_words_raw": longest_raw,
-        "longest_word_host": longest_host, "longest_word_path": longest_path,
-        "avg_words_raw": avg_raw, "avg_word_host": avg_host, "avg_word_path": avg_path,
-        "phish_hints": sum(1 for k in PHISH_HINTS if k in full.lower()),
-        "domain_in_brand": domain_in_brand, "brand_in_subdomain": brand_in_subdomain,
-        "brand_in_path": brand_in_path, "suspicious_tld": suspicious_tld_flag,
-        "statistical_report": statistical_report,
+        "nb_subdomains":      len(subdomain.split(".")) if subdomain else 0,
+        "prefix_suffix":      prefix_suffix,
+        "random_domain":      random_domain,
+        "shortening_service": shortening_service,
+        "path_extension":     path_extension,
+        "nb_redirection":     nb_redirection,
+        # ─── BATAS 37 FITUR URL ──────────────────────────────────────────────────────
+        # Di bawah ini adalah fitur 81-mode. Jangan geser ke sini.
     }
 
+
+# ══════════════════════════════════════════════════════════════════════
+# ██  BAGIAN 6 — EKSTRAKSI FITUR KONTEN WEB (44 FITUR TAMBAHAN)
+# ══════════════════════════════════════════════════════════════════════
+# Mengakses URL secara langsung (HTTP request), parse HTML-nya,
+# lalu ekstrak fitur dari isi halaman web seperti:
+#   - Jumlah & rasio hyperlink internal/eksternal
+#   - CSS eksternal, favicon eksternal, iframe, popup, klik kanan diblokir
+#   - Form login, judul kosong, copyright domain
+#   - Data reputasi eksternal (WHOIS, DNS, PageRank, traffic) via enrich_external_features()
+# Hasilnya digabung dengan fitur URL untuk membentuk vektor 81 fitur.
 @lru_cache(maxsize=128)
 def extract_web_content_features(url):
     out = {}
@@ -332,17 +451,77 @@ def extract_web_content_features(url):
     _, domain, _ = _extract_parts(base_host)
     out["domain_in_title"] = 1 if (domain and title and domain in title) else 0
     page_text = soup.get_text(" ", strip=True).lower()
-    out["domain_with_copyright"] = 1 if ((("©" in page_text) or ("copyright" in page_text)) and domain and domain in page_text) else 0
+    out["domain_with_copyright"] = 1 if ((("|" in page_text) or ("copyright" in page_text)) and domain and domain in page_text) else 0
 
     enrich_external_features(out, base_host)
     return out
 
+def _compute_url_extended_features(url):
+    """
+    ★ 18 FITUR URL TAMBAHAN — hanya untuk mode 81, tidak masuk model 37.
+    Dihitung dari URL saja (tanpa fetch web), tapi secara desain hanya dipakai
+    saat model _81 aktif. Dipisah dari extract_url_features() supaya mode 37
+    benar-benar hanya punya 37 fitur, tidak lebih.
+    """
+    full, parsed, hostname, path = parse_url(url)
+    subdomain, domain, tld = _extract_parts(hostname)
+    words_raw, shortest_raw, longest_raw, avg_raw = _word_stats(full)
+    _, shortest_host, longest_host, avg_host = _word_stats(hostname)
+    _, shortest_path, longest_path, avg_path = _word_stats(path)
+    tld_last = tld.split(".")[-1] if tld else ""
+    suspicious_tld_flag  = 1 if (tld in SUSPICIOUS_TLD or tld_last in SUSPICIOUS_TLD) else 0
+    domain_in_brand      = 1 if any(b in domain    for b in BRANDS) else 0
+    brand_in_subdomain   = 1 if any(b in subdomain for b in BRANDS) else 0
+    brand_in_path        = 1 if any(b in path.lower() for b in BRANDS) else 0
+    random_domain        = 1 if entropy(domain) > 3.5 else 0
+    statistical_report   = 1 if (suspicious_tld_flag or is_ip(hostname)
+                                  or full.count("@") >= 1 or random_domain) else 0
+    return {
+        # nb_external_redirection: placeholder 0, nilai real diisi oleh
+        # extract_web_content_features() via resp.history (di-update setelahnya).
+        "nb_external_redirection": 0,
+        "length_words_raw":   words_raw,
+        "char_repeat":        sum(1 for i in range(1, len(full)) if full[i] == full[i-1]),
+        "shortest_words_raw": shortest_raw,
+        "shortest_word_host": shortest_host,
+        "shortest_word_path": shortest_path,
+        "longest_words_raw":  longest_raw,
+        "longest_word_host":  longest_host,
+        "longest_word_path":  longest_path,
+        "avg_words_raw":      avg_raw,
+        "avg_word_host":      avg_host,
+        "avg_word_path":      avg_path,
+        "phish_hints":        sum(1 for k in PHISH_HINTS if k in full.lower()),
+        "domain_in_brand":    domain_in_brand,
+        "brand_in_subdomain": brand_in_subdomain,
+        "brand_in_path":      brand_in_path,
+        "suspicious_tld":     suspicious_tld_flag,
+        "statistical_report": statistical_report,
+    }
+
+
 def extract_features(url, include_web_content):
+    # CATATAN: fungsi ini tidak lagi dipakai oleh get_model_and_features().
+    # Logika penggabungan fitur sudah dipindah langsung ke get_model_and_features()
+    # supaya pemilihan mode 37 vs 81 bisa mengontrol PERSIS fitur mana yang masuk feats_full.
+    # Fungsi ini dipertahankan untuk kompatibilitas jika ada kode lain yang memanggilnya.
     feats = extract_url_features(url)
     if include_web_content:
+        feats.update(_compute_url_extended_features(url))
         feats.update(extract_web_content_features(url))
     return feats
 
+
+# ══════════════════════════════════════════════════════════════════════
+# ██  BAGIAN 7 — RULE-BASED PREFILTER (24 RULE)
+# ══════════════════════════════════════════════════════════════════════
+# Filter berbasis aturan yang berjalan SEBELUM model ML.
+# 24 rule dibagi 3 tingkat kepentingan:
+#   - Sangat Penting (4 rule): satu saja terpicu → langsung PHISHING
+#   - Penting (17 rule, bobot ×2): skor gabungan
+#   - Cukup Penting (3 rule, bobot ×1): skor gabungan
+# Jika risk_score ≥ 5 atau ada rule sangat penting → URL divonis PHISHING
+# tanpa perlu masuk ke model ML sama sekali (efisiensi + presisi tinggi).
 def rule_based_eval(url, return_detail=False):
     feats = extract_url_features(url)
     # Sangat Penting: satu fitur saja → langsung Phishing (24 rule, kategori "Sangat Penting")
@@ -381,6 +560,10 @@ def rule_based_eval(url, return_detail=False):
     vi_hits = [k for k,v in very_important.items() if v]
     imp_hits = [k for k,v in important.items() if v]
     less_hits = [k for k,v in less_important.items() if v]
+    # ★ FORMULA RISK SCORE — cara menghitung skor bahaya rule-based
+    # risk_score = (jumlah rule Penting × 2) + (jumlah rule Cukup Penting × 1)
+    # Rule "Sangat Penting" tidak masuk skor — keberadaannya saja sudah langsung PHISHING.
+    # Vonis PHISHING jika: ada vi_hits (rule sangat penting) ATAU risk_score >= 5
     risk_score = 2*len(imp_hits) + len(less_hits)
     if vi_hits or risk_score >= 5:
         category, rule_flag = "Phishing", 1
@@ -395,11 +578,50 @@ def rule_based_eval(url, return_detail=False):
         }
     return risk_score, category, rule_flag
 
-def get_model_and_features(url):
-    feats = extract_features(url, include_web_content=True)
-    web_content_ok = any(feats.get(k) not in (None, 0) for k in WEB_CONTENT_KEYS)
-    suffix = "_81" if web_content_ok else "_37"
 
+# ══════════════════════════════════════════════════════════════════════
+# ██  BAGIAN 8 — SELEKSI MODEL & PEMBUATAN VEKTOR FITUR
+# ══════════════════════════════════════════════════════════════════════
+# Menentukan apakah pakai model 37 fitur atau 81 fitur,
+# berdasarkan apakah ekstraksi konten web berhasil mendapat data.
+# Lalu menyiapkan vektor numerik yang siap masuk ke model ML.
+def get_model_and_features(url):
+    # ★ TITIK KRITIS — PEMILIHAN MODE 81 vs 37 FITUR
+    #
+    # ALUR YANG BENAR (2 tahap):
+    #
+    # TAHAP 1: Coba ambil web content dulu (fetch HTTP).
+    #   extract_web_content_features() return dict kosong {} jika fetch gagal/timeout.
+    #   Cek apakah ada fitur WEB_CONTENT_KEYS yang berhasil terisi (nilai non-None, non-0).
+    #
+    # TAHAP 2: Berdasarkan hasil tahap 1, putuskan mode:
+    #   web_content_ok = True  → mode 81 → extract_features() dengan include_web_content=True
+    #                            feats berisi 37 + 18 extended + 26 web = 81 fitur
+    #   web_content_ok = False → mode 37 → hanya extract_url_features() (37 fitur)
+    #                            feats berisi 37 fitur SAJA, sisanya NaN di log
+    #
+    # KENAPA TIDAK LANGSUNG include_web_content=True LALU CEK?
+    #   Karena _compute_url_extended_features() selalu dijalankan di dalam
+    #   extract_features(..., include_web_content=True), sehingga feats_full
+    #   sudah berisi 55 fitur URL sebelum kita tahu web fetch berhasil atau tidak.
+    #   Akibatnya log mode=37 tetap terisi 55 kolom → ini yang salah.
+
+    # Tahap 1: cek apakah web content bisa diambil
+    web_feats = extract_web_content_features(url)
+    web_content_ok = any(web_feats.get(k) not in (None, 0) for k in WEB_CONTENT_KEYS)
+
+    # Tahap 2: bangun feats sesuai mode yang ditentukan
+    if web_content_ok:
+        # Mode 81: 37 URL + 18 URL extended + 26 web content
+        feats = extract_url_features(url)
+        feats.update(_compute_url_extended_features(url))
+        feats.update(web_feats)          # web_feats juga override nb_external_redirection
+    else:
+        # Mode 37: 37 URL saja — feats_full tidak mengandung fitur extended
+        # sehingga log akan tulis "NaN" untuk 44 kolom sisanya
+        feats = extract_url_features(url)
+
+    suffix = "_81" if web_content_ok else "_37"
     rf   = GLOBAL_MODELS.get(f"rf{suffix}")
     xgb  = GLOBAL_MODELS.get(f"xgb{suffix}")
     meta = GLOBAL_MODELS.get(f"meta{suffix}")
@@ -410,6 +632,11 @@ def get_model_and_features(url):
     return rf, xgb, meta, cols, web_content_ok, feats
 
 def build_ml_vector(feats, cols):
+    # ★ PEMBENTUKAN VEKTOR INPUT MODEL
+    # Mengambil nilai fitur sesuai urutan kolom dari feature_columns{suffix}.txt
+    # Urutan ini HARUS sama persis dengan urutan saat model dilatih.
+    # Nilai yang tidak ada di feats → default 0.0 (bukan None, agar numpy tidak error).
+    # Susun nilai fitur sesuai urutan kolom yang dipakai saat training
     vector = [to_float(feats.get(c, 0.0)) for c in cols]
     return np.array([vector], dtype=float), cols
 
@@ -428,6 +655,16 @@ def _proba_for_class(model, X, class_value):
 
 def _label_to_phishing_flag(raw): return 1 if int(raw)==PHISHING_CLASS_VALUE else 0
 
+
+# ══════════════════════════════════════════════════════════════════════
+# ██  BAGIAN 9 — PREDIKSI MODEL ML (RF + XGB + STACKING)
+# ══════════════════════════════════════════════════════════════════════
+# Menjalankan prediksi dari 3 model:
+#   1. Random Forest → rf_prob
+#   2. XGBoost → xgb_prob
+#   3. Meta-Learner (Logistic Regression Stacking) → stack_prob
+#      Input meta-learner: [rf_prob, xgb_prob, rule_flag, risk_score]
+#      tergantung jumlah fitur yang dipakai saat training (n_features_in_)
 def predict_models(feats, cols, precomputed_rule_score=None, precomputed_rule_flag=None, rf=None, xgb=None, meta=None):
     X, used_cols = build_ml_vector(feats, cols)
     df = pd.DataFrame(X, columns=used_cols)
@@ -466,6 +703,15 @@ def predict_models(feats, cols, precomputed_rule_score=None, precomputed_rule_fl
         "stack_pred": stack_pred, "stack_prob": stack_prob, "meta_n_in": meta_n_in,
     }
 
+
+# ══════════════════════════════════════════════════════════════════════
+# ██  BAGIAN 10 — SHAP (EXPLAINABILITY MODEL)
+# ══════════════════════════════════════════════════════════════════════
+# Menghitung nilai SHAP untuk tiap fitur — mengukur seberapa besar
+# kontribusi masing-masing fitur terhadap prediksi phishing/benign.
+# - Pakai TreeExplainer (cepat) untuk RF/XGB
+# - Fallback ke KernelExplainer jika TreeExplainer gagal
+# Hasil: daftar top fitur beserta arah dampaknya (PHISHING/BENIGN/NEUTRAL)
 def _shap_vector(shap_values, class_index=1):
     if isinstance(shap_values, list):
         vals = shap_values[class_index] if len(shap_values) > class_index else shap_values[0]
@@ -504,6 +750,15 @@ def get_shap_top(model, X_arr, feature_names, top_n=5):
         })
     return result
 
+
+# ══════════════════════════════════════════════════════════════════════
+# ██  BAGIAN 11 — PETA RISIKO FITUR (PHISHING RISK DIRECTION)
+# ══════════════════════════════════════════════════════════════════════
+# Untuk tiap fitur, mendefinisikan:
+#   - Kondisi nilai yang mengarah ke PHISHING (+ alasannya)
+#   - Kondisi nilai yang mengarah ke BENIGN (+ alasannya)
+# Dipakai untuk memberi label dampak fitur pada penjelasan LLM.
+# Mencakup ~55 fitur dari URL, konten web, dan reputasi domain.
 def get_phishing_risk_direction(feature_name, feature_value):
     feature_rules = {
         "ip":                    (lambda v: v==1,  "Menggunakan IP address langsung sebagai domain (bukan nama domain)",
@@ -639,7 +894,15 @@ def get_phishing_risk_direction(feature_name, feature_value):
 
     return "NEUTRAL", "Nilai fitur tidak memenuhi kondisi ekstrem phishing maupun benign secara definitif"
 
-# ── Perbaikan Prompt Builder (Strict Context & Anti Malu-maluin) ──────────────────
+
+# ══════════════════════════════════════════════════════════════════════
+# ██  BAGIAN 12 — PEMBUATAN PROMPT & PENJELASAN LLM
+# ══════════════════════════════════════════════════════════════════════
+# Menyusun prompt terstruktur untuk LLM (Claude/GPT) yang berisi:
+#   - Hasil deteksi (label, probabilitas, model yang dipakai)
+#   - Data fitur yang terpicu beserta arah dampaknya
+#   - Instruksi ketat agar LLM tidak mengada-ada atau membalik kesimpulan
+# LLM dipanggil secara async (ThreadPoolExecutor) dengan timeout 15 detik.
 def build_llm_prompt(url, category, p_phish, model_main, top_features_with_reasons, rekomendasi_tetap, decision_source=None):
     lines = []
     for i, f in enumerate(top_features_with_reasons, 1):
@@ -923,6 +1186,15 @@ def generate_explanation(url, feats_full, cols, rf_prob, xgb_prob, stack_prob,
         "phishing_probability": round(p_phish, 4), "llm_reasoning": llm_reasoning, "shap_items": shap_items,
     }
 
+
+# ══════════════════════════════════════════════════════════════════════
+# ██  BAGIAN 13 — LOGGING KE CSV
+# ══════════════════════════════════════════════════════════════════════
+# Menulis hasil setiap deteksi ke file log CSV (log_feature_extraction.csv).
+# Kolom yang dicatat: nomor urut, URL, mode (37/81), sumber keputusan,
+# status, semua nilai 81 fitur, fitur SHAP teratas, dan penjelasan LLM.
+# Pakai threading lock agar aman jika ada request bersamaan (concurrent).
+# Jika file sedang dibuka di Excel → log gagal dan user diberi peringatan.
 def log_feature_extraction(url, mode, feats, feature_columns_81, status, decision_source):
     with _log_lock:
         return _log_feature_extraction_impl(url, mode, feats, feature_columns_81, status, decision_source)
@@ -956,14 +1228,63 @@ def _log_feature_extraction_impl(url, mode, feats, feature_columns_81, status, d
         "DECISION_SOURCE": decision_source,
         "STATUS": status,
     }
+    # ★ PENGISIAN NILAI FITUR KE LOG
+    # Ada 4 kasus yang dibedakan di sini:
+    #
+    #   KASUS 1 — Fitur ADA di feats, nilai numerik nyata
+    #     → Float → di-round ke 4 desimal (cegah 0.8509316770186336 → jadi 0.8509)
+    #     → Int   → tulis apa adanya (0 atau 1 untuk fitur biner)
+    #
+    #   KASUS 2 — Fitur TIDAK ADA di feats (key tidak ada sama sekali)
+    #     → Tulis "NaN" → jelas beda dari nilai 0 yang sah di Excel.
+    #     → Terjadi pada 44 fitur web-content saat mode=37 (fetch gagal).
+    #
+    #   KASUS 3 — Fitur ada tapi nilainya None
+    #     → Tulis "NaN" karena None = data tidak tersedia.
+    #
+    #   KASUS 4 — Fitur REPUTASI EKSTERNAL yang API-nya gagal return data nyata
+    #     → enrich_external_features() mengisi 0 / 0.0 sebagai default saat API gagal.
+    #     → Nilai 0 ini BUKAN nilai sah (domain_age=0 bukan berarti domain baru lahir).
+    #     → Fitur-fitur ini di-treat sebagai "NaN" jika nilainya == 0 atau 0.0.
+    #
+    # Dengan ini, di Excel:
+    #   "NaN"  = tidak diambil / API gagal / data tidak tersedia
+    #   0       = fitur biner diambil, tidak terpicu (flag off)
+    #   1       = fitur biner diambil, terpicu (flag on)
+    #   0.0     = fitur rasio diambil, hasilnya memang nol
+    #   0.8509  = fitur rasio diambil, hasilnya 85.09%
+
+    # Fitur reputasi eksternal: nilai 0/0.0 = API gagal, bukan nilai sah
+    _EXTERNAL_API_FEATURES = {
+        "domain_age", "domain_registration_length", "web_traffic",
+        "whois_registered_domain", "google_index", "page_rank", "dns_record",
+    }
+
+    _SENTINEL = object()
     for feat in feature_columns_81:
-        val = feats.get(feat, 0.0)
-        if isinstance(val, (list, dict, tuple)):
-            row_dict[feat] = str(val)
-        elif val is None:
-            row_dict[feat] = 0.0
+        raw = feats.get(feat, _SENTINEL)
+
+        if raw is _SENTINEL or raw is None:
+            # Kasus 2 & 3: key tidak ada atau None → "NaN"
+            row_dict[feat] = "NaN"
+
+        elif feat in _EXTERNAL_API_FEATURES and raw == 0:
+            # Kasus 4: fitur reputasi eksternal bernilai 0 = API gagal, bukan nol sejati
+            row_dict[feat] = "NaN"
+
+        elif isinstance(raw, (list, dict, tuple)):
+            row_dict[feat] = str(raw)
+
+        elif isinstance(raw, float):
+            # Kasus 1 float: round ke 4 desimal — cegah 0.8509316770186336 dll
+            row_dict[feat] = round(raw, 4)
+
+        elif isinstance(raw, int):
+            # Kasus 1 int: tulis apa adanya (0 atau 1)
+            row_dict[feat] = raw
+
         else:
-            row_dict[feat] = val
+            row_dict[feat] = raw
 
     MAX_CELL = 32000
     row_dict["PHISHING_PROB"] = feats.get("_phishing_prob", "")
@@ -1012,7 +1333,22 @@ def _log_feature_extraction_impl(url, mode, feats, feature_columns_81, status, d
         print(f"[LOG ERROR] {e}")
         return str(e)
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
+
+# ══════════════════════════════════════════════════════════════════════
+# ██  BAGIAN 14 — FLASK ROUTES (API ENDPOINT)
+# ══════════════════════════════════════════════════════════════════════
+# Endpoint HTTP yang bisa diakses dari frontend/browser:
+#   GET  /         → Serve halaman HTML utama (UI detector)
+#   GET  /health   → Cek status server
+#   POST /predict  → Endpoint utama: terima URL, jalankan deteksi, kembalikan hasil JSON
+#   POST /predict_url & /analyze → Alias dari /predict
+#
+# Alur /predict:
+#   1. Validasi URL → cek lock log → ekstrak fitur
+#   2. Rule-based eval → pilih mode (37/81) & model
+#   3. Berdasarkan decision_mode: jalankan RF-only / XGB-only / Stacking / Hybrid
+#   4. Jika hybrid + rule terpicu → langsung phishing (bypass ML)
+#   5. Generate penjelasan SHAP + LLM → tulis log → kembalikan JSON
 @app.get("/")
 def index():
     return send_from_directory("Phishing_detection_app", "advanced_hybrid_detector.html")
@@ -1052,6 +1388,9 @@ def predict():
 
     rf, xgb, meta, cols, web_content_ok, feats_full = get_model_and_features(url)
     include_web_content = web_content_ok
+    # ★ PENENTUAN STRING MODE — dicatat ke kolom MODE di log CSV
+    # "81" → model _81 aktif (URL + web content berhasil diambil)
+    # "37" → model _37 aktif (hanya fitur URL, fetch web gagal/timeout)
     mode = "81" if web_content_ok else "37"
     risk_score, risk_category, rule_flag, rule_detail = rule_based_eval(url, return_detail=True)
 
@@ -1108,16 +1447,20 @@ def predict():
                 if abs(shap_score) < 1e-6 or feat_val is None:
                     continue
 
+                # Round float ke 4 desimal supaya tidak muncul 33.33333333333333 di log
+                feat_val_str = f"{round(feat_val, 4)}" if isinstance(feat_val, float) else str(feat_val)
                 arah = "PHISHING" if shap_score > 0 else ("BENIGN" if shap_score < 0 else "NETRAL")
                 log_top_lines.append(
-                    f"Fitur: {f['name']} | Nilai: {feat_val} | SHAP: {shap_score:+.4f} | Dampak: [{arah}]"
+                    f"Fitur: {f['name']} | Nilai: {feat_val_str} | SHAP: {shap_score:+.4f} | Dampak: [{arah}]"
                 )
         else:
             for f in exp.get("top_influential_features", []):
                 shap_val = f.get("shap_value_signed", f.get("shap_value", 0))
                 arah = f.get("shap_direction", f.get("impact", "?"))
+                raw_val = f.get('value', 0)
+                val_str = f"{round(raw_val, 4)}" if isinstance(raw_val, float) else str(raw_val)
                 log_top_lines.append(
-                    f"Fitur: {f['name']} | Nilai: {f.get('value',0)} | SHAP: {shap_val:+.4f} | Dampak: [{arah}]"
+                    f"Fitur: {f['name']} | Nilai: {val_str} | SHAP: {shap_val:+.4f} | Dampak: [{arah}]"
                 )
 
         log_top = "\n".join(log_top_lines)
@@ -1126,6 +1469,13 @@ def predict():
         feats_for_log["_top_features"]  = log_top
         feats_for_log["_llm_reasoning"] = exp.get("llm_reasoning", "")
         
+        # ★ TITIK LOG — Logging dipanggil di sini, setelah SHAP & LLM selesai.
+        # feats_for_log berisi semua fitur + 3 field tambahan yang TIDAK masuk model ML:
+        #   _phishing_prob  → probabilitas akhir phishing
+        #   _top_features   → daftar SHAP teratas dalam format teks (untuk kolom TOP_FEATURE)
+        #   _llm_reasoning  → teks penjelasan dari LLM (untuk kolom LLM_REASONING)
+        # Jika log gagal (misal file Excel terbuka) → resp["log_warning"] diisi pesan error,
+        # tapi response tetap dikirim ke user (deteksi tidak dibatalkan).
         log_err = log_feature_extraction(url, mode, feats_for_log, FEATURE_COLUMNS_81, category, decision_source)
         if log_err:
             resp["log_warning"] = log_err
@@ -1147,6 +1497,11 @@ def predict():
         p = safe_avg(preds["rf_prob"], preds["xgb_prob"])
         return build_response(p, "ml_rf_xgb_average_only", "RF + XGB Average", preds["rf_prob"], preds["xgb_prob"], rf_model=rf, xgb_model=xgb)
 
+    # ★ BYPASS ML — Rule-based prefilter langsung vonis PHISHING
+    # Jika use_prefilter=True DAN rule_flag=1 (rule sangat penting terpicu / risk_score >= 5):
+    # → ML tidak dijalankan sama sekali (hemat komputasi)
+    # → Confidence dikunci minimum 95% (PREFILTER_PHISHING_MIN_CONF)
+    # → decision_source = "rule_based_prefilter_phishing"
     if use_prefilter and rule_flag == 1:
         p = clamp01(max(PREFILTER_PHISHING_MIN_CONF, risk_score/10.0))
         return build_response(p, "rule_based_prefilter_phishing", "Rule-Based Prefilter", web_used=False)
