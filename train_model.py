@@ -33,6 +33,10 @@ GA_CV_SPLITS = 5
 current_dir = os.path.dirname(os.path.abspath(__file__))
 data_file_path = os.path.join(current_dir, "DataFiles", "data_cleaning.csv")
 
+# Semua artifact hasil training disimpan ke sini
+MODELS_DIR = os.path.join(current_dir, "models")
+os.makedirs(MODELS_DIR, exist_ok=True)
+
 url_features_37 = [
     "length_url",
     "length_hostname",
@@ -383,14 +387,14 @@ def train_and_save(feature_mode: str, suffix: str) -> None:
     stack_prob = np.asarray(stack_model.predict_proba(X_test))[:, 1]
     print_metrics(f"Stacking (RF+XGB+LR) {suffix}", y_test, stack_pred, stack_prob)
 
-    with open(os.path.join(current_dir, f"random_forest_model{suffix}.pkl"), "wb") as f:
+    with open(os.path.join(MODELS_DIR, f"random_forest_model{suffix}.pkl"), "wb") as f:
         pickle.dump(rf_model, f)
-    with open(os.path.join(current_dir, f"xgboost_model{suffix}.pkl"), "wb") as f:
+    with open(os.path.join(MODELS_DIR, f"xgboost_model{suffix}.pkl"), "wb") as f:
         pickle.dump(xgb_model, f)
-    with open(os.path.join(current_dir, f"rule_lr{suffix}.pkl"), "wb") as f:
+    with open(os.path.join(MODELS_DIR, f"rule_lr{suffix}.pkl"), "wb") as f:
         pickle.dump(stack_model.final_estimator_, f)
     with open(
-        os.path.join(current_dir, f"feature_columns{suffix}.txt"), "w", encoding="utf-8"
+        os.path.join(MODELS_DIR, f"feature_columns{suffix}.txt"), "w", encoding="utf-8"
     ) as f:
         f.write("\n".join(selected_features))
 
@@ -408,7 +412,7 @@ def train_and_save(feature_mode: str, suffix: str) -> None:
         },
     }
     with open(
-        os.path.join(current_dir, f"ga_tuning_report{suffix}.json"),
+        os.path.join(MODELS_DIR, f"ga_tuning_report{suffix}.json"),
         "w",
         encoding="utf-8",
     ) as f:
