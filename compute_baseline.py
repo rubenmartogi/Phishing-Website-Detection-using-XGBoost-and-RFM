@@ -92,6 +92,7 @@ def main():
     args = parser.parse_args()
 
     base_dir = args.models_dir or os.path.dirname(os.path.abspath(__file__))
+    models_dir = os.path.join(base_dir, "models")
     data_path = args.data or os.path.join(base_dir, "DataFiles", "data_cleaning.csv")
     suffix = f"_{args.suffix}"
     feature_mode = "hybrid81" if args.suffix == "81" else "url37"
@@ -107,11 +108,11 @@ def main():
     print(f"[OK] random_state          : {RANDOM_STATE}  (sama dengan train_model.py)\n")
 
     # 2) Load model pickle hasil training
-    with open(os.path.join(base_dir, f"random_forest_model{suffix}.pkl"), "rb") as f:
+    with open(os.path.join(models_dir, f"random_forest_model{suffix}.pkl"), "rb") as f:
         rf_model = pickle.load(f)
-    with open(os.path.join(base_dir, f"xgboost_model{suffix}.pkl"), "rb") as f:
+    with open(os.path.join(models_dir, f"xgboost_model{suffix}.pkl"), "rb") as f:
         xgb_model = pickle.load(f)
-    with open(os.path.join(base_dir, f"rule_lr{suffix}.pkl"), "rb") as f:
+    with open(os.path.join(models_dir, f"rule_lr{suffix}.pkl"), "rb") as f:
         lr_model = pickle.load(f)
 
     assert rf_model.n_features_in_ == len(feats), (
@@ -230,9 +231,9 @@ def main():
     print("--- AUDIT TRAIL ---")
     print(f"Waktu eksekusi script ini : {datetime.now().isoformat()}")
     print(f"SHA256 (16 char) data_cleaning.csv     : {file_hash(data_path)}")
-    print(f"SHA256 (16 char) random_forest_model{suffix}.pkl: {file_hash(os.path.join(base_dir, f'random_forest_model{suffix}.pkl'))}")
-    print(f"SHA256 (16 char) xgboost_model{suffix}.pkl      : {file_hash(os.path.join(base_dir, f'xgboost_model{suffix}.pkl'))}")
-    print(f"SHA256 (16 char) rule_lr{suffix}.pkl             : {file_hash(os.path.join(base_dir, f'rule_lr{suffix}.pkl'))}")
+    print(f"SHA256 (16 char) random_forest_model{suffix}.pkl: {file_hash(os.path.join(models_dir, f'random_forest_model{suffix}.pkl'))}")
+    print(f"SHA256 (16 char) xgboost_model{suffix}.pkl      : {file_hash(os.path.join(models_dir, f'xgboost_model{suffix}.pkl'))}")
+    print(f"SHA256 (16 char) rule_lr{suffix}.pkl             : {file_hash(os.path.join(models_dir, f'rule_lr{suffix}.pkl'))}")
     print("\n(Simpan output ini sebagai bukti tertulis / screenshot untuk lampiran sidang)")
 
 

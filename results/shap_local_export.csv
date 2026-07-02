@@ -1,121 +1,121 @@
 url_no,url,status,model,p_phishing,prediction,rank,feature,feature_value,shap_signed,abs_shap,direction
-1,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,1,google_index,1.0,0.090147,0.090147,PHISHING
-1,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,2,page_rank,4.78,-0.060748,0.060748,BENIGN
-1,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,3,nb_hyperlinks,161.0,-0.058628,0.058628,BENIGN
-1,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,4,nb_www,1.0,-0.049885,0.049885,BENIGN
-1,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,5,web_traffic,0.0,0.04802,0.04802,PHISHING
-1,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,6,domain_age,0.0,0.01879,0.01879,PHISHING
-1,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,7,char_repeat,4.0,-0.014641,0.014641,BENIGN
-1,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,8,phish_hints,0.0,-0.014318,0.014318,BENIGN
-1,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,9,avg_word_path,0.0,-0.014278,0.014278,BENIGN
-1,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,10,ratio_digits_url,0.0,-0.013964,0.013964,BENIGN
-1,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,1,nb_www,1.0,-1.206183,1.206183,BENIGN
-1,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,2,nb_hyperlinks,161.0,-1.188662,1.188662,BENIGN
-1,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,3,google_index,1.0,1.061653,1.061653,PHISHING
-1,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,4,page_rank,4.78,-0.970909,0.970909,BENIGN
-1,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,5,shortest_word_path,0.0,-0.469145,0.469145,BENIGN
-1,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,6,phish_hints,0.0,-0.424458,0.424458,BENIGN
-1,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,7,login_form,1.0,0.394039,0.394039,PHISHING
-1,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,8,web_traffic,0.0,0.370812,0.370812,PHISHING
-1,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,9,longest_words_raw,5.0,-0.312429,0.312429,BENIGN
-1,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,10,nb_hyphens,0.0,0.309657,0.309657,PHISHING
-1,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,1,page_rank,4.78,-0.118224,0.118224,BENIGN
-1,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,2,nb_www,1.0,-0.10178,0.10178,BENIGN
-1,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,3,nb_hyperlinks,161.0,-0.088155,0.088155,BENIGN
-1,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,4,shortest_word_host,3.0,-0.031296,0.031296,BENIGN
-1,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,5,avg_word_path,0.0,-0.025706,0.025706,BENIGN
-1,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,6,nb_and,0.0,-0.024457,0.024457,BENIGN
-1,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,7,avg_words_raw,3.75,-0.018158,0.018158,BENIGN
-1,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,8,phish_hints,0.0,-0.017736,0.017736,BENIGN
-1,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,9,safe_anchor,0.0,-0.012879,0.012879,BENIGN
-1,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,10,external_favicon,0.0,-0.002952,0.002952,BENIGN
-2,https://www.python.org/downloads/,benign,Random Forest (GA),0.4728,BENIGN,1,google_index,1.0,0.085964,0.085964,PHISHING
-2,https://www.python.org/downloads/,benign,Random Forest (GA),0.4728,BENIGN,2,web_traffic,0.0,0.072581,0.072581,PHISHING
-2,https://www.python.org/downloads/,benign,Random Forest (GA),0.4728,BENIGN,3,page_rank,5.09,-0.071877,0.071877,BENIGN
-2,https://www.python.org/downloads/,benign,Random Forest (GA),0.4728,BENIGN,4,nb_hyperlinks,986.0,-0.06365,0.06365,BENIGN
-2,https://www.python.org/downloads/,benign,Random Forest (GA),0.4728,BENIGN,5,nb_www,1.0,-0.033382,0.033382,BENIGN
-2,https://www.python.org/downloads/,benign,Random Forest (GA),0.4728,BENIGN,6,domain_age,0.0,0.02779,0.02779,PHISHING
-2,https://www.python.org/downloads/,benign,Random Forest (GA),0.4728,BENIGN,7,phish_hints,0.0,-0.014063,0.014063,BENIGN
-2,https://www.python.org/downloads/,benign,Random Forest (GA),0.4728,BENIGN,8,ratio_digits_url,0.0,-0.012419,0.012419,BENIGN
-2,https://www.python.org/downloads/,benign,Random Forest (GA),0.4728,BENIGN,9,longest_words_raw,9.0,-0.009003,0.009003,BENIGN
-2,https://www.python.org/downloads/,benign,Random Forest (GA),0.4728,BENIGN,10,nb_hyphens,0.0,0.008759,0.008759,PHISHING
-2,https://www.python.org/downloads/,benign,XGBoost (GA),0.0147,BENIGN,1,page_rank,5.09,-1.794348,1.794348,BENIGN
-2,https://www.python.org/downloads/,benign,XGBoost (GA),0.0147,BENIGN,2,nb_www,1.0,-1.043239,1.043239,BENIGN
-2,https://www.python.org/downloads/,benign,XGBoost (GA),0.0147,BENIGN,3,nb_hyperlinks,986.0,-1.014805,1.014805,BENIGN
-2,https://www.python.org/downloads/,benign,XGBoost (GA),0.0147,BENIGN,4,google_index,1.0,1.008383,1.008383,PHISHING
-2,https://www.python.org/downloads/,benign,XGBoost (GA),0.0147,BENIGN,5,web_traffic,0.0,0.538041,0.538041,PHISHING
-2,https://www.python.org/downloads/,benign,XGBoost (GA),0.0147,BENIGN,6,phish_hints,0.0,-0.465747,0.465747,BENIGN
-2,https://www.python.org/downloads/,benign,XGBoost (GA),0.0147,BENIGN,7,nb_slash,4.0,-0.433518,0.433518,BENIGN
-2,https://www.python.org/downloads/,benign,XGBoost (GA),0.0147,BENIGN,8,nb_hyphens,0.0,0.373999,0.373999,PHISHING
-2,https://www.python.org/downloads/,benign,XGBoost (GA),0.0147,BENIGN,9,longest_word_path,9.0,-0.344002,0.344002,BENIGN
-2,https://www.python.org/downloads/,benign,XGBoost (GA),0.0147,BENIGN,10,ratio_digits_url,0.0,-0.334174,0.334174,BENIGN
-2,https://www.python.org/downloads/,benign,"Stacking (RF+XGB+LR, GA)",0.1289,BENIGN,1,page_rank,5.09,-0.140238,0.140238,BENIGN
-2,https://www.python.org/downloads/,benign,"Stacking (RF+XGB+LR, GA)",0.1289,BENIGN,2,nb_www,1.0,-0.062985,0.062985,BENIGN
-2,https://www.python.org/downloads/,benign,"Stacking (RF+XGB+LR, GA)",0.1289,BENIGN,3,shortening_service,0.0,-0.058873,0.058873,BENIGN
-2,https://www.python.org/downloads/,benign,"Stacking (RF+XGB+LR, GA)",0.1289,BENIGN,4,ratio_intHyperlinks,0.6724137931034483,-0.044681,0.044681,BENIGN
-2,https://www.python.org/downloads/,benign,"Stacking (RF+XGB+LR, GA)",0.1289,BENIGN,5,phish_hints,0.0,-0.023737,0.023737,BENIGN
-2,https://www.python.org/downloads/,benign,"Stacking (RF+XGB+LR, GA)",0.1289,BENIGN,6,nb_hyperlinks,986.0,-0.016644,0.016644,BENIGN
-2,https://www.python.org/downloads/,benign,"Stacking (RF+XGB+LR, GA)",0.1289,BENIGN,7,ratio_intMedia,11.11111111111111,-0.015439,0.015439,BENIGN
-2,https://www.python.org/downloads/,benign,"Stacking (RF+XGB+LR, GA)",0.1289,BENIGN,8,ratio_extMedia,88.88888888888889,-0.011655,0.011655,BENIGN
-2,https://www.python.org/downloads/,benign,"Stacking (RF+XGB+LR, GA)",0.1289,BENIGN,9,statistical_report,0.0,-0.007376,0.007376,BENIGN
-2,https://www.python.org/downloads/,benign,"Stacking (RF+XGB+LR, GA)",0.1289,BENIGN,10,suspicious_tld,0.0,-0.002886,0.002886,BENIGN
-3,https://verify-session-paypal.net/webscr/login.php,phishing,Random Forest (GA),0.7902,PHISHING,1,page_rank,0.0,0.140036,0.140036,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,Random Forest (GA),0.7902,PHISHING,2,phish_hints,3.0,0.069652,0.069652,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,Random Forest (GA),0.7902,PHISHING,3,google_index,0.0,-0.067864,0.067864,BENIGN
-3,https://verify-session-paypal.net/webscr/login.php,phishing,Random Forest (GA),0.7902,PHISHING,4,web_traffic,0.0,0.049722,0.049722,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,Random Forest (GA),0.7902,PHISHING,5,nb_hyperlinks,0.0,0.038784,0.038784,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,Random Forest (GA),0.7902,PHISHING,6,nb_www,0.0,0.030032,0.030032,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,Random Forest (GA),0.7902,PHISHING,7,domain_in_brand,1.0,-0.028183,0.028183,BENIGN
-3,https://verify-session-paypal.net/webscr/login.php,phishing,Random Forest (GA),0.7902,PHISHING,8,domain_age,0.0,0.023285,0.023285,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,Random Forest (GA),0.7902,PHISHING,9,domain_in_title,0.0,-0.019368,0.019368,BENIGN
-3,https://verify-session-paypal.net/webscr/login.php,phishing,Random Forest (GA),0.7902,PHISHING,10,safe_anchor,0.0,0.018197,0.018197,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,XGBoost (GA),0.9915,PHISHING,1,page_rank,0.0,2.451241,2.451241,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,XGBoost (GA),0.9915,PHISHING,2,phish_hints,3.0,1.989555,1.989555,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,XGBoost (GA),0.9915,PHISHING,3,nb_www,0.0,0.727992,0.727992,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,XGBoost (GA),0.9915,PHISHING,4,domain_in_brand,1.0,-0.65011,0.65011,BENIGN
-3,https://verify-session-paypal.net/webscr/login.php,phishing,XGBoost (GA),0.9915,PHISHING,5,nb_hyperlinks,0.0,0.62738,0.62738,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,XGBoost (GA),0.9915,PHISHING,6,google_index,0.0,-0.588777,0.588777,BENIGN
-3,https://verify-session-paypal.net/webscr/login.php,phishing,XGBoost (GA),0.9915,PHISHING,7,nb_hyphens,2.0,-0.501679,0.501679,BENIGN
-3,https://verify-session-paypal.net/webscr/login.php,phishing,XGBoost (GA),0.9915,PHISHING,8,nb_slash,4.0,-0.426865,0.426865,BENIGN
-3,https://verify-session-paypal.net/webscr/login.php,phishing,XGBoost (GA),0.9915,PHISHING,9,domain_in_title,0.0,-0.422419,0.422419,BENIGN
-3,https://verify-session-paypal.net/webscr/login.php,phishing,XGBoost (GA),0.9915,PHISHING,10,web_traffic,0.0,0.394106,0.394106,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,"Stacking (RF+XGB+LR, GA)",0.9704,PHISHING,1,shortest_word_path,3.0,0.259486,0.259486,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,"Stacking (RF+XGB+LR, GA)",0.9704,PHISHING,2,page_rank,0.0,0.069224,0.069224,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,"Stacking (RF+XGB+LR, GA)",0.9704,PHISHING,3,phish_hints,3.0,0.066234,0.066234,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,"Stacking (RF+XGB+LR, GA)",0.9704,PHISHING,4,nb_hyperlinks,0.0,0.023396,0.023396,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,"Stacking (RF+XGB+LR, GA)",0.9704,PHISHING,5,longest_word_path,6.0,0.014623,0.014623,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,"Stacking (RF+XGB+LR, GA)",0.9704,PHISHING,6,https_token,0.0,0.008468,0.008468,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,"Stacking (RF+XGB+LR, GA)",0.9704,PHISHING,7,web_traffic,0.0,0.007644,0.007644,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,"Stacking (RF+XGB+LR, GA)",0.9704,PHISHING,8,domain_registration_length,0.0,0.003692,0.003692,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,"Stacking (RF+XGB+LR, GA)",0.9704,PHISHING,9,longest_word_host,7.0,0.002876,0.002876,PHISHING
-3,https://verify-session-paypal.net/webscr/login.php,phishing,"Stacking (RF+XGB+LR, GA)",0.9704,PHISHING,10,empty_title,0.0,0.001295,0.001295,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,Random Forest (GA),0.7944,PHISHING,1,page_rank,0.0,0.126484,0.126484,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,Random Forest (GA),0.7944,PHISHING,2,google_index,0.0,-0.063328,0.063328,BENIGN
-4,https://account-security-microsoft365.com/validate/index.html,phishing,Random Forest (GA),0.7944,PHISHING,3,phish_hints,2.0,0.053693,0.053693,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,Random Forest (GA),0.7944,PHISHING,4,web_traffic,0.0,0.044298,0.044298,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,Random Forest (GA),0.7944,PHISHING,5,nb_hyperlinks,0.0,0.037838,0.037838,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,Random Forest (GA),0.7944,PHISHING,6,nb_www,0.0,0.031622,0.031622,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,Random Forest (GA),0.7944,PHISHING,7,domain_in_brand,1.0,-0.029047,0.029047,BENIGN
-4,https://account-security-microsoft365.com/validate/index.html,phishing,Random Forest (GA),0.7944,PHISHING,8,domain_age,0.0,0.024876,0.024876,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,Random Forest (GA),0.7944,PHISHING,9,ratio_digits_host,0.0909090909090909,0.019803,0.019803,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,Random Forest (GA),0.7944,PHISHING,10,domain_in_title,0.0,-0.017834,0.017834,BENIGN
-4,https://account-security-microsoft365.com/validate/index.html,phishing,XGBoost (GA),0.9537,PHISHING,1,page_rank,0.0,2.318291,2.318291,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,XGBoost (GA),0.9537,PHISHING,2,phish_hints,2.0,1.843508,1.843508,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,XGBoost (GA),0.9537,PHISHING,3,nb_www,0.0,0.714448,0.714448,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,XGBoost (GA),0.9537,PHISHING,4,domain_in_brand,1.0,-0.680529,0.680529,BENIGN
-4,https://account-security-microsoft365.com/validate/index.html,phishing,XGBoost (GA),0.9537,PHISHING,5,length_hostname,33.0,0.672873,0.672873,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,XGBoost (GA),0.9537,PHISHING,6,google_index,0.0,-0.655447,0.655447,BENIGN
-4,https://account-security-microsoft365.com/validate/index.html,phishing,XGBoost (GA),0.9537,PHISHING,7,length_url,61.0,-0.647815,0.647815,BENIGN
-4,https://account-security-microsoft365.com/validate/index.html,phishing,XGBoost (GA),0.9537,PHISHING,8,nb_hyperlinks,0.0,0.604794,0.604794,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,XGBoost (GA),0.9537,PHISHING,9,nb_hyphens,2.0,-0.577864,0.577864,BENIGN
-4,https://account-security-microsoft365.com/validate/index.html,phishing,XGBoost (GA),0.9537,PHISHING,10,ratio_digits_host,0.0909090909090909,0.455638,0.455638,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,"Stacking (RF+XGB+LR, GA)",0.9671,PHISHING,1,page_rank,0.0,0.148015,0.148015,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,"Stacking (RF+XGB+LR, GA)",0.9671,PHISHING,2,nb_www,0.0,0.09979,0.09979,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,"Stacking (RF+XGB+LR, GA)",0.9671,PHISHING,3,ratio_extHyperlinks,0.0,0.044501,0.044501,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,"Stacking (RF+XGB+LR, GA)",0.9671,PHISHING,4,nb_hyperlinks,0.0,0.037794,0.037794,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,"Stacking (RF+XGB+LR, GA)",0.9671,PHISHING,5,ratio_extErrors,0.0,0.034617,0.034617,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,"Stacking (RF+XGB+LR, GA)",0.9671,PHISHING,6,tld_in_subdomain,0.0,0.025922,0.025922,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,"Stacking (RF+XGB+LR, GA)",0.9671,PHISHING,7,ip,0.0,0.024874,0.024874,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,"Stacking (RF+XGB+LR, GA)",0.9671,PHISHING,8,prefix_suffix,1.0,0.018517,0.018517,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,"Stacking (RF+XGB+LR, GA)",0.9671,PHISHING,9,nb_underscore,0.0,0.011434,0.011434,PHISHING
-4,https://account-security-microsoft365.com/validate/index.html,phishing,"Stacking (RF+XGB+LR, GA)",0.9671,PHISHING,10,shortest_words_raw,3.0,0.008173,0.008173,PHISHING
+1,https://pytorch.org/,benign,Random Forest (GA),0.5655,BENIGN,1,google_index,1.0,0.100046,0.100046,PHISHING
+1,https://pytorch.org/,benign,Random Forest (GA),0.5655,BENIGN,2,nb_hyperlinks,148.0,-0.067208,0.067208,BENIGN
+1,https://pytorch.org/,benign,Random Forest (GA),0.5655,BENIGN,3,page_rank,4.92,-0.057261,0.057261,BENIGN
+1,https://pytorch.org/,benign,Random Forest (GA),0.5655,BENIGN,4,web_traffic,0.0,0.05529,0.05529,PHISHING
+1,https://pytorch.org/,benign,Random Forest (GA),0.5655,BENIGN,5,nb_www,0.0,0.043863,0.043863,PHISHING
+1,https://pytorch.org/,benign,Random Forest (GA),0.5655,BENIGN,6,domain_age,0.0,0.030111,0.030111,PHISHING
+1,https://pytorch.org/,benign,Random Forest (GA),0.5655,BENIGN,7,char_repeat,2.0,0.015963,0.015963,PHISHING
+1,https://pytorch.org/,benign,Random Forest (GA),0.5655,BENIGN,8,ratio_intHyperlinks,0.8243,-0.011076,0.011076,BENIGN
+1,https://pytorch.org/,benign,Random Forest (GA),0.5655,BENIGN,9,phish_hints,0.0,-0.011074,0.011074,BENIGN
+1,https://pytorch.org/,benign,Random Forest (GA),0.5655,BENIGN,10,safe_anchor,11.4865,-0.01032,0.01032,BENIGN
+1,https://pytorch.org/,benign,XGBoost (GA),0.3811,BENIGN,1,nb_hyperlinks,148.0,-1.358622,1.358622,BENIGN
+1,https://pytorch.org/,benign,XGBoost (GA),0.3811,BENIGN,2,nb_www,0.0,1.141894,1.141894,PHISHING
+1,https://pytorch.org/,benign,XGBoost (GA),0.3811,BENIGN,3,google_index,1.0,1.077032,1.077032,PHISHING
+1,https://pytorch.org/,benign,XGBoost (GA),0.3811,BENIGN,4,page_rank,4.92,-0.892474,0.892474,BENIGN
+1,https://pytorch.org/,benign,XGBoost (GA),0.3811,BENIGN,5,shortest_word_path,0.0,-0.451794,0.451794,BENIGN
+1,https://pytorch.org/,benign,XGBoost (GA),0.3811,BENIGN,6,web_traffic,0.0,0.438248,0.438248,PHISHING
+1,https://pytorch.org/,benign,XGBoost (GA),0.3811,BENIGN,7,length_url,20.0,0.425399,0.425399,PHISHING
+1,https://pytorch.org/,benign,XGBoost (GA),0.3811,BENIGN,8,nb_hyphens,0.0,0.38877,0.38877,PHISHING
+1,https://pytorch.org/,benign,XGBoost (GA),0.3811,BENIGN,9,phish_hints,0.0,-0.388631,0.388631,BENIGN
+1,https://pytorch.org/,benign,XGBoost (GA),0.3811,BENIGN,10,longest_words_raw,7.0,-0.249481,0.249481,BENIGN
+1,https://pytorch.org/,benign,"Stacking (RF+XGB+LR, GA)",0.4886,BENIGN,1,nb_hyperlinks,148.0,-0.122953,0.122953,BENIGN
+1,https://pytorch.org/,benign,"Stacking (RF+XGB+LR, GA)",0.4886,BENIGN,2,page_rank,4.92,-0.111855,0.111855,BENIGN
+1,https://pytorch.org/,benign,"Stacking (RF+XGB+LR, GA)",0.4886,BENIGN,3,google_index,1.0,0.106917,0.106917,PHISHING
+1,https://pytorch.org/,benign,"Stacking (RF+XGB+LR, GA)",0.4886,BENIGN,4,nb_www,0.0,0.075375,0.075375,PHISHING
+1,https://pytorch.org/,benign,"Stacking (RF+XGB+LR, GA)",0.4886,BENIGN,5,web_traffic,0.0,0.056256,0.056256,PHISHING
+1,https://pytorch.org/,benign,"Stacking (RF+XGB+LR, GA)",0.4886,BENIGN,6,phish_hints,0.0,-0.051298,0.051298,BENIGN
+1,https://pytorch.org/,benign,"Stacking (RF+XGB+LR, GA)",0.4886,BENIGN,7,length_url,20.0,0.040742,0.040742,PHISHING
+1,https://pytorch.org/,benign,"Stacking (RF+XGB+LR, GA)",0.4886,BENIGN,8,shortest_word_path,0.0,-0.021602,0.021602,BENIGN
+1,https://pytorch.org/,benign,"Stacking (RF+XGB+LR, GA)",0.4886,BENIGN,9,length_hostname,11.0,0.006155,0.006155,PHISHING
+1,https://pytorch.org/,benign,"Stacking (RF+XGB+LR, GA)",0.4886,BENIGN,10,nb_subdomains,0.0,-0.00256,0.00256,BENIGN
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,Random Forest (GA),0.6959,PHISHING,1,page_rank,0.0,0.094958,0.094958,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,Random Forest (GA),0.6959,PHISHING,2,google_index,0.0,-0.061604,0.061604,BENIGN
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,Random Forest (GA),0.6959,PHISHING,3,nb_hyperlinks,0.0,0.035207,0.035207,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,Random Forest (GA),0.6959,PHISHING,4,web_traffic,0.0,0.035038,0.035038,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,Random Forest (GA),0.6959,PHISHING,5,length_hostname,52.0,0.030995,0.030995,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,Random Forest (GA),0.6959,PHISHING,6,length_words_raw,0.0,-0.026919,0.026919,BENIGN
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,Random Forest (GA),0.6959,PHISHING,7,length_url,227.0,0.022634,0.022634,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,Random Forest (GA),0.6959,PHISHING,8,nb_dots,4.0,0.022289,0.022289,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,Random Forest (GA),0.6959,PHISHING,9,nb_www,1.0,-0.021954,0.021954,BENIGN
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,Random Forest (GA),0.6959,PHISHING,10,domain_age,0.0,0.018732,0.018732,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,XGBoost (GA),0.9243,PHISHING,1,page_rank,0.0,2.187679,2.187679,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,XGBoost (GA),0.9243,PHISHING,2,length_hostname,52.0,1.221092,1.221092,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,XGBoost (GA),0.9243,PHISHING,3,google_index,0.0,-0.86979,0.86979,BENIGN
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,XGBoost (GA),0.9243,PHISHING,4,length_words_raw,0.0,-0.844477,0.844477,BENIGN
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,XGBoost (GA),0.9243,PHISHING,5,nb_slash,7.0,0.843331,0.843331,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,XGBoost (GA),0.9243,PHISHING,6,nb_dots,4.0,0.825778,0.825778,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,XGBoost (GA),0.9243,PHISHING,7,nb_www,1.0,-0.673416,0.673416,BENIGN
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,XGBoost (GA),0.9243,PHISHING,8,nb_hyperlinks,0.0,0.542879,0.542879,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,XGBoost (GA),0.9243,PHISHING,9,nb_underscore,3.0,-0.454236,0.454236,BENIGN
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,XGBoost (GA),0.9243,PHISHING,10,longest_words_raw,0.0,-0.434734,0.434734,BENIGN
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,"Stacking (RF+XGB+LR, GA)",0.9357,PHISHING,1,page_rank,0.0,0.179021,0.179021,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,"Stacking (RF+XGB+LR, GA)",0.9357,PHISHING,2,nb_hyperlinks,0.0,0.087584,0.087584,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,"Stacking (RF+XGB+LR, GA)",0.9357,PHISHING,3,nb_slash,7.0,0.040253,0.040253,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,"Stacking (RF+XGB+LR, GA)",0.9357,PHISHING,4,ratio_extHyperlinks,0.0,0.030216,0.030216,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,"Stacking (RF+XGB+LR, GA)",0.9357,PHISHING,5,web_traffic,0.0,0.02987,0.02987,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,"Stacking (RF+XGB+LR, GA)",0.9357,PHISHING,6,tld_in_path,0.0,0.014583,0.014583,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,"Stacking (RF+XGB+LR, GA)",0.9357,PHISHING,7,nb_dots,4.0,0.014369,0.014369,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,"Stacking (RF+XGB+LR, GA)",0.9357,PHISHING,8,ratio_digits_host,0.0,0.011768,0.011768,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,"Stacking (RF+XGB+LR, GA)",0.9357,PHISHING,9,shortest_word_host,0.0,0.008237,0.008237,PHISHING
+2,http://www.kueronekayacotn-co-jp.kueronekayacotn.rvxxkq.top/ai/?authenticated=true&amp;amp;openid/gp/signin/x&amp;amp;i=a&amp;amp;oauth=m&amp;amp;i?ie=utf8&amp;amp;ref_=rhf_custrec_signin6a906d6920fa43de76f847daeb0940fff77e45ae,phishing,"Stacking (RF+XGB+LR, GA)",0.9357,PHISHING,10,external_favicon,0.0,0.006343,0.006343,PHISHING
+3,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,1,google_index,1.0,0.090147,0.090147,PHISHING
+3,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,2,page_rank,4.78,-0.060748,0.060748,BENIGN
+3,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,3,nb_hyperlinks,161.0,-0.058628,0.058628,BENIGN
+3,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,4,nb_www,1.0,-0.049885,0.049885,BENIGN
+3,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,5,web_traffic,0.0,0.04802,0.04802,PHISHING
+3,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,6,domain_age,0.0,0.01879,0.01879,PHISHING
+3,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,7,char_repeat,4.0,-0.014641,0.014641,BENIGN
+3,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,8,phish_hints,0.0,-0.014318,0.014318,BENIGN
+3,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,9,avg_word_path,0.0,-0.014278,0.014278,BENIGN
+3,https://www.ietf.org/,benign,Random Forest (GA),0.3597,BENIGN,10,ratio_digits_url,0.0,-0.013964,0.013964,BENIGN
+3,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,1,nb_www,1.0,-1.206183,1.206183,BENIGN
+3,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,2,nb_hyperlinks,161.0,-1.188662,1.188662,BENIGN
+3,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,3,google_index,1.0,1.061653,1.061653,PHISHING
+3,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,4,page_rank,4.78,-0.970909,0.970909,BENIGN
+3,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,5,shortest_word_path,0.0,-0.469145,0.469145,BENIGN
+3,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,6,phish_hints,0.0,-0.424458,0.424458,BENIGN
+3,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,7,login_form,1.0,0.394039,0.394039,PHISHING
+3,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,8,web_traffic,0.0,0.370812,0.370812,PHISHING
+3,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,9,longest_words_raw,5.0,-0.312429,0.312429,BENIGN
+3,https://www.ietf.org/,benign,XGBoost (GA),0.0265,BENIGN,10,nb_hyphens,0.0,0.309657,0.309657,PHISHING
+3,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,1,page_rank,4.78,-0.159531,0.159531,BENIGN
+3,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,2,nb_www,1.0,-0.122965,0.122965,BENIGN
+3,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,3,nb_hyperlinks,161.0,-0.043192,0.043192,BENIGN
+3,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,4,ip,0.0,-0.038027,0.038027,BENIGN
+3,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,5,prefix_suffix,0.0,-0.02316,0.02316,BENIGN
+3,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,6,phish_hints,0.0,-0.018307,0.018307,BENIGN
+3,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,7,nb_com,0.0,-0.015216,0.015216,BENIGN
+3,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,8,nb_qm,0.0,-0.015033,0.015033,BENIGN
+3,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,9,domain_in_brand,0.0,-0.010712,0.010712,BENIGN
+3,https://www.ietf.org/,benign,"Stacking (RF+XGB+LR, GA)",0.0721,BENIGN,10,length_hostname,12.0,0.0048,0.0048,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,Random Forest (GA),0.6753,PHISHING,1,page_rank,0.0,0.09719,0.09719,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,Random Forest (GA),0.6753,PHISHING,2,google_index,0.0,-0.065004,0.065004,BENIGN
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,Random Forest (GA),0.6753,PHISHING,3,nb_hyperlinks,0.0,0.041878,0.041878,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,Random Forest (GA),0.6753,PHISHING,4,web_traffic,0.0,0.041833,0.041833,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,Random Forest (GA),0.6753,PHISHING,5,length_words_raw,0.0,-0.031464,0.031464,BENIGN
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,Random Forest (GA),0.6753,PHISHING,6,nb_www,0.0,0.030779,0.030779,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,Random Forest (GA),0.6753,PHISHING,7,domain_age,0.0,0.028439,0.028439,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,Random Forest (GA),0.6753,PHISHING,8,ratio_digits_url,0.2581,0.024641,0.024641,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,Random Forest (GA),0.6753,PHISHING,9,domain_in_title,0.0,-0.020027,0.020027,BENIGN
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,Random Forest (GA),0.6753,PHISHING,10,longest_words_raw,0.0,-0.01757,0.01757,BENIGN
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,XGBoost (GA),0.8424,PHISHING,1,page_rank,0.0,1.980846,1.980846,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,XGBoost (GA),0.8424,PHISHING,2,length_words_raw,0.0,-0.994231,0.994231,BENIGN
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,XGBoost (GA),0.8424,PHISHING,3,nb_hyperlinks,0.0,0.818918,0.818918,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,XGBoost (GA),0.8424,PHISHING,4,google_index,0.0,-0.813514,0.813514,BENIGN
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,XGBoost (GA),0.8424,PHISHING,5,nb_www,0.0,0.705706,0.705706,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,XGBoost (GA),0.8424,PHISHING,6,longest_words_raw,0.0,-0.487424,0.487424,BENIGN
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,XGBoost (GA),0.8424,PHISHING,7,length_url,62.0,-0.477288,0.477288,BENIGN
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,XGBoost (GA),0.8424,PHISHING,8,shortest_word_path,0.0,-0.42249,0.42249,BENIGN
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,XGBoost (GA),0.8424,PHISHING,9,domain_registration_length,0.0,-0.42228,0.42228,BENIGN
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,XGBoost (GA),0.8424,PHISHING,10,ratio_digits_host,0.0435,0.398454,0.398454,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,"Stacking (RF+XGB+LR, GA)",0.9056,PHISHING,1,page_rank,0.0,0.170377,0.170377,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,"Stacking (RF+XGB+LR, GA)",0.9056,PHISHING,2,nb_hyperlinks,0.0,0.103786,0.103786,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,"Stacking (RF+XGB+LR, GA)",0.9056,PHISHING,3,safe_anchor,0.0,0.060598,0.060598,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,"Stacking (RF+XGB+LR, GA)",0.9056,PHISHING,4,tld_in_path,0.0,-0.052419,0.052419,BENIGN
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,"Stacking (RF+XGB+LR, GA)",0.9056,PHISHING,5,ratio_digits_url,0.2581,0.030696,0.030696,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,"Stacking (RF+XGB+LR, GA)",0.9056,PHISHING,6,nb_underscore,0.0,0.02348,0.02348,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,"Stacking (RF+XGB+LR, GA)",0.9056,PHISHING,7,statistical_report,0.0,0.021043,0.021043,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,"Stacking (RF+XGB+LR, GA)",0.9056,PHISHING,8,ratio_intHyperlinks,0.0,0.013598,0.013598,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,"Stacking (RF+XGB+LR, GA)",0.9056,PHISHING,9,ratio_extHyperlinks,0.0,0.012991,0.012991,PHISHING
+4,http://nmhokdypni.sum4iit.club/vnafvra97w/?q=3717065149&id=100,phishing,"Stacking (RF+XGB+LR, GA)",0.9056,PHISHING,10,web_traffic,0.0,0.008034,0.008034,PHISHING
