@@ -63,8 +63,18 @@ def get_model_and_features(url):
     Tentukan mode 37 vs 81 fitur berdasarkan hasil web fetch.
     Return: (rf, xgb, meta, cols, web_content_ok, feats_full)
     """
-    web_feats     = extract_web_content_features(url)
+    web_feats = extract_web_content_features(url)
     web_content_ok = any(web_feats.get(k) not in (None, 0) for k in WEB_CONTENT_KEYS)
+
+    # Jangan gunakan mode 81 jika seluruh reputasi eksternal gagal diperoleh.
+    # Nilai default 0 dari API yang gagal dapat membuat model menganggap URL aman sebagai phishing.
+    reputation_keys = (
+        "whois_registered_domain", "domain_registration_length", "domain_age",
+        "web_traffic", "google_index", "page_rank",
+    )
+    reputation_available = all(web_feats.get(k) not in (None, 0) for k in reputation_keys)
+    if web_content_ok and not reputation_available:
+        web_content_ok = False
 
     if web_content_ok:
         # Mode 81: 37 URL + 18 URL extended + 26 web content

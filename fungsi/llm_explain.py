@@ -318,8 +318,12 @@ def build_llm_prompt(url, category, p_phish, model_main, top_features_with_reaso
 def fetch_llm_reasoning_safe(prompt):
     try:
         return get_llm_reasoning(prompt)
-    except Exception as e:
-        return f"Penjelasan otomatis tertunda karena interupsi jaringan API: {str(e)}"
+    except Exception:
+        return (
+            "Penjelasan AI eksternal tidak tersedia karena quota atau koneksi API bermasalah. "
+            "Prediksi tetap dihitung oleh rule-based dan model machine learning. "
+            "Gunakan fitur paling berpengaruh di atas sebagai dasar pemeriksaan."
+        )
 
 
 def generate_explanation(url, feats_full, cols, rf_prob, xgb_prob, stack_prob,
