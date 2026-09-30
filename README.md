@@ -65,10 +65,10 @@ URL → Validasi → Ekstraksi Fitur (37/81)
 
 **Artifact Model:**
 
-- `random_forest_model_37.pkl`, `xgboost_model_37.pkl`, `rule_lr_37.pkl`
-- `random_forest_model_81.pkl`, `xgboost_model_81.pkl`, `rule_lr_81.pkl`
-- `feature_columns_37.txt`, `feature_columns_81.txt`
-- `ga_tuning_report_37.json`, `ga_tuning_report_81.json`
+- `models/random_forest_model_37.pkl`, `models/xgboost_model_37.pkl`, `models/rule_lr_37.pkl`
+- `models/random_forest_model_81.pkl`, `models/xgboost_model_81.pkl`, `models/rule_lr_81.pkl`
+- `models/feature_columns_37.txt`, `models/feature_columns_81.txt`
+- `models/ga_tuning_report_37.json`, `models/ga_tuning_report_81.json`
 
 ---
 
@@ -166,6 +166,8 @@ Input meta-learner LR bergantung pada `n_features_in_` model `.pkl` (2–4 fitur
 
 ## Instalasi
 
+Gunakan Python 3.11 dan jalankan perintah dari direktori utama proyek, yaitu direktori yang berisi `app.py` dan `requirements.txt`. Dependensi proyek sudah dicantumkan dan versinya dikunci di `requirements.txt`.
+
 ```bash
 # 1. Virtual environment
 python -m venv .venv
@@ -180,7 +182,25 @@ python -m venv .venv
 source .venv/bin/activate
 
 # 2. Install dependencies
-pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+### Konfigurasi Lokal Opsional
+
+Untuk mengaktifkan penjelasan LLM atau pengayaan reputasi domain, buat `.env` dari file contoh. Jika `.env` sudah ada, jangan menimpanya karena mungkin berisi konfigurasi lokal.
+
+```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+```
+
+`OPENAI_API_KEY` dipakai untuk penjelasan LLM. `OPR_API_KEY`, `SERP_API_KEY`, dan `SEMRUSH_KEY` dipakai oleh pengayaan fitur eksternal. Semua API key bersifat opsional; jangan membagikan file `.env` yang berisi key. Tanpa key LLM, deteksi tetap berjalan tanpa penjelasan LLM.
+
+Di Windows, jika PowerShell memblokir aktivasi virtual environment, izinkan aktivasi hanya untuk sesi terminal saat ini, lalu aktifkan kembali:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
 ```
 
 **Dependencies utama:**
@@ -194,16 +214,20 @@ pip install -r requirements.txt
 
 ```bash
 python app.py
-# Akses: http://127.0.0.1:5000
 ```
+
+Buka antarmuka lokal di `http://127.0.0.1:5000`. Periksa status aplikasi melalui `http://127.0.0.1:5000/health`.
+
+Artifact model harus tersedia di folder `models/` sebelum aplikasi digunakan. Jika artifact belum ada, pastikan `DataFiles/data_cleaning.csv` tersedia lalu jalankan `python train_model.py`; proses Genetic Algorithm dapat memerlukan waktu cukup lama.
 
 ### Notebook Training & Evaluasi
 
 ```bash
-jupyter notebook Phishing_Website_Detection_Models___Training.ipynb
+python -m pip install notebook
+jupyter notebook "Phishing Website Detection_Models & Training.ipynb"
 ```
 
-Jalankan cell berurutan. Model PKL harus tersedia di direktori yang sama.
+Jalankan cell secara berurutan. Notebook ini membaca artifact dan laporan GA dari folder `models/`; sesuaikan path pemuatan notebook ke folder tersebut sebelum menjalankan jika masih menunjuk ke direktori utama.
 
 ---
 
@@ -318,18 +342,11 @@ Setiap prediksi dicatat ke `log_feature_extraction.csv`:
 
 ## Hasil Model
 
-Evaluasi pada data test (20%), threshold 0.6:
+Evaluasi membandingkan Random Forest, XGBoost, dan stacking (Random Forest + XGBoost dengan Logistic Regression sebagai meta-learner) pada dua mode fitur: URL-only (37 fitur) dan hybrid (81 fitur). Pengujian menggunakan 20% data sebagai data uji.
 
-| Model         | Mode     | Accuracy       | Precision      | Recall         | F1-Score       | AUC-ROC        |
-| ------------- | -------- | -------------- | -------------- | -------------- | -------------- | -------------- |
-| Random Forest | 37 fitur | lihat notebook | lihat notebook | lihat notebook | lihat notebook | lihat notebook |
-| XGBoost       | 37 fitur | lihat notebook | lihat notebook | lihat notebook | lihat notebook | lihat notebook |
-| Stacking (LR) | 37 fitur | lihat notebook | lihat notebook | lihat notebook | lihat notebook | lihat notebook |
-| Random Forest | 81 fitur | lihat notebook | lihat notebook | lihat notebook | lihat notebook | lihat notebook |
-| XGBoost       | 81 fitur | lihat notebook | lihat notebook | lihat notebook | lihat notebook | lihat notebook |
-| Stacking (LR) | 81 fitur | lihat notebook | lihat notebook | lihat notebook | lihat notebook | lihat notebook |
+Metrik yang dilaporkan meliputi accuracy, precision, recall, F1-score, dan ROC-AUC. Threshold 0.6 digunakan untuk menentukan label prediksi dan menghitung metrik yang bergantung pada threshold; ROC-AUC dihitung dari probabilitas prediksi sehingga tidak bergantung pada threshold.
 
-> Jalankan notebook Cell 7–8 untuk mendapatkan angka aktual setelah model PKL tersedia.
+Jalankan notebook evaluasi setelah artifact model tersedia di folder `models/` untuk menghasilkan nilai metrik aktual.
 
 ---
 
@@ -362,35 +379,22 @@ Evaluasi pada data test (20%), threshold 0.6:
 ## Struktur File
 
 ```
-├── app.py                         ← Flask backend + full pipeline
-├── train_model.py                 ← Training pipeline (GA tuning)
-├── Phishing_Website_Detection_
-│   Models___Training.ipynb        ← Evaluasi & SHAP notebook
-├── external_features.py           ← WHOIS, DNS, PageRank, dll.
-├── llm_utils.py                   ← Wrapper panggilan LLM API
-├── requirements.txt
-├── feature_columns_37.txt         ← Daftar 37 fitur (urutan kolom model)
-├── feature_columns_81.txt         ← Daftar 81 fitur (urutan kolom model)
-├── random_forest_model_37.pkl
-├── xgboost_model_37.pkl
-├── rule_lr_37.pkl
-├── random_forest_model_81.pkl
-├── xgboost_model_81.pkl
-├── rule_lr_81.pkl
-├── ga_tuning_report_37.json
-├── ga_tuning_report_81.json
-├── log_feature_extraction.csv     ← Log otomatis setiap deteksi
+├── app.py                                      ← Flask backend + full pipeline
+├── train_model.py                              ← Training pipeline (GA tuning)
+├── requirements.txt                            ← Dependensi Python
+├── .env.example                                ← Contoh konfigurasi opsional
+├── external_features.py                        ← Pengayaan WHOIS, DNS, PageRank, dll.
+├── llm_utils.py                                ← Wrapper panggilan LLM API
+├── fungsi/                                     ← Logika fitur, model, rule, SHAP, dan logging
+├── models/                                     ← Model PKL, daftar fitur, dan laporan GA
 ├── DataFiles/
-│   ├── data_cleaning.csv          ← Dataset training
-│   └── [lainnya]
-├── static/                        ← Frontend assets
-├── Phishing_detection_app/        ← UI (advanced_hybrid_detector.html)
-└── results/                       ← Output grafik SHAP & metrik notebook
-    ├── 01_metric_comparison.png
-    ├── 02_roc_curves.png
-    ├── shap_global_*.png
-    ├── shap_waterfall_*.png
-    └── shap_local_export.csv
+│   └── data_cleaning.csv                       ← Dataset training/evaluasi
+├── Phishing Website Detection_Models & Training.ipynb ← Evaluasi & SHAP
+├── preprocessing.ipynb                         ← Eksplorasi dan preprocessing data
+├── Phishing_detection_app/                     ← UI web
+├── static/                                     ← Aset frontend
+├── log_feature_extraction.csv                  ← Log prediksi aplikasi
+└── results/                                    ← Grafik dan keluaran analisis notebook
 ```
 
 ---
